@@ -1,0 +1,7 @@
+*.npy
+*.model
+*.pickle
+corpus/*
+
+.*.swp
+.*.swo
