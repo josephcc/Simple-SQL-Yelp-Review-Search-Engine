@@ -1,53 +1,70 @@
-from peewee import *
-from playhouse.sqlite_ext import SqliteExtDatabase
+from sqlalchemy import *
+from sqlalchemy.schema import Index
+from sqlalchemy.engine.url import URL
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Integer, ForeignKey, String, Column, Float, Text, Boolean
 
-dbPath = './corpus/YELP/yelp.db'
-db = SqliteExtDatabase(dbPath)
+DeclarativeBase = declarative_base()
 
-idxDbPath = './corpus/YELP/yelp.db'
-idxDb = './corpus/YELP/yelp.db'
+class Business(DeclarativeBase):
+    __tablename__ = 'business'
 
-class BaseModel(Model):
-    class Meta:
-        database = db
+    business_id = Column(String, primary_key=True)
+    stars = Column(Float, index=True)
+    review_count = Column(Integer)
+    name = Column(String)
+    state = Column(String, index=True)
+    city = Column(String, index=True)
 
-class Business(BaseModel):
-#[u'city', u'neighborhood', u'name', u'business_id', u'longitude', u'hours', 
-# u'state', u'postal_code', u'categories', u'stars', u'address', u'latitude',
-# u'review_count', u'attributes', u'type', u'is_open']
-    business_id = FixedCharField(unique=True)
-    stars = FloatField(index=True)
-    review_count = IntegerField(index=True)
-    name = CharField()
-    state = FixedCharField(index=True)
-    city = FixedCharField(index=True)
+    categories = relationship("Category", back_populates="business")
+    reviews = relationship("Review", back_populates="business")
+
     
-class Category(BaseModel):
-    business = ForeignKeyField(Business, related_name='categories')
-    name = FixedCharField(index=True)
+class Category(DeclarativeBase):
+    __tablename__ = 'category'
 
-class Review(BaseModel):
-# [u'funny', u'user_id', u'review_id', u'text', u'business_id', u'stars',
-# u'date', u'useful', u'type', u'cool']
-    review_id = FixedCharField(unique=True)
-    business = ForeignKeyField(Business, related_name='reviews')
-    stars = FloatField(index=True)
-    text = TextField()
+    id = Column(Integer, primary_key=True)
+    name = Column(String, index=True)
+
+    business_id = Column(String, ForeignKey('business.business_id'))
+    business = relationship("Business", back_populates="categories")
+
+
+class Review(DeclarativeBase):
+    __tablename__ = 'review'
+
+    review_id = Column(String, primary_key=True)
+    stars = Column(Float, index=True)
+    text =  Column(Text)
+
+    business_id = Column(String, ForeignKey('business.business_id'))
+    business = relationship("Business", back_populates="reviews")
     
-class Index(BaseModel):
-    token = FixedCharField(index=True)
-    business_id = FixedCharField(index=True)
-    review_id = FixedCharField(index=True)
-    index = IntegerField()
-    city = FixedCharField(index=True)
-    isName = BooleanField(index=True)
-    class Meta:
-        indexes = (
-            (('token', 'city', 'isName'), False),
-        )
-    
-db.connect()
-if __name__ == '__main__':
-    db.drop_table(Index)
-    db.create_tables([Index])
+class Index(DeclarativeBase):
+    __tablename__ = 'index'
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String, index=True)
+    business_id = Column(String, index=True)
+    review_id = Column(String, index=True)
+    index = Column(Integer)
+    city = Column(String, index=True)
+    isName = Column(Boolean, index=True)
+
+    __table_args__ = (Index('idx_token_city_isName', 'token', 'city', 'isName'),)
+
+
+DATABASE = {
+  'drivername': 'postgres',
+  'host': 'localhost',
+  'port': '5432',
+  'username': 'josephcc',
+  'password': 'josephcc',
+  'database': 'YELP'
+}
+
+
+engine = create_engine(URL(**DATABASE))
+DeclarativeBase.metadata.create_all(engine)
 

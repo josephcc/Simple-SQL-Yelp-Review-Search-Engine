@@ -8,3 +8,5 @@ corpus/*
 
 venv/*
 models/*
+
+*.pyc
