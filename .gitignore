@@ -5,3 +5,6 @@ corpus/*
 
 .*.swp
 .*.swo
+
+venv/*
+models/*

@@ -4,6 +4,9 @@ from playhouse.sqlite_ext import SqliteExtDatabase
 dbPath = './corpus/YELP/yelp.db'
 db = SqliteExtDatabase(dbPath)
 
+idxDbPath = './corpus/YELP/yelp.db'
+idxDb = './corpus/YELP/yelp.db'
+
 class BaseModel(Model):
     class Meta:
         database = db
@@ -31,5 +34,20 @@ class Review(BaseModel):
     stars = FloatField(index=True)
     text = TextField()
     
+class Index(BaseModel):
+    token = FixedCharField(index=True)
+    business_id = FixedCharField(index=True)
+    review_id = FixedCharField(index=True)
+    index = IntegerField()
+    city = FixedCharField(index=True)
+    isName = BooleanField(index=True)
+    class Meta:
+        indexes = (
+            (('token', 'city', 'isName'), False),
+        )
+    
 db.connect()
+if __name__ == '__main__':
+    db.drop_table(Index)
+    db.create_tables([Index])
 

@@ -1,8 +1,6 @@
 import logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-import cPickle as pickle
-
 from gensim.models.doc2vec import Doc2Vec, LabeledSentence
 
 from nltk.tokenize import wordpunct_tokenize as TOK
@@ -27,7 +25,6 @@ def clean(tokens):
 
     return tokens
 
-
 class YelpIterator(object):
     def __iter__(self):
         for business in Business.select():
@@ -40,6 +37,8 @@ class YelpIterator(object):
                 yield LabeledSentence(words=tokens, tags=labels)
 
 
-model = Doc2Vec(YelpIterator(), size=300, workers=8, min_count=10)
-model.save('yelp_simple.model')
+
+if __name__ == '__main__':
+    model = Doc2Vec(YelpIterator(), size=300, workers=8, min_count=10)
+    model.save('yelp_simple.model')
 
