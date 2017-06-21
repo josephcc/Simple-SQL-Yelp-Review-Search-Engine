@@ -63,9 +63,11 @@ for review in open(reviewFilePath):
     review = json.loads(review)
     if not review['business_id'] in bids:
         continue
-    businessObj = Business(business_id = review['business_id'])
+    businessObj = DBSession.query(Business).filter(Business.business_id ==  review['business_id']).one()
     attrs = {k:review[k] for k in ['review_id', 'stars', 'text']}
     attrs['business_id'] = businessObj.business_id
+    attrs['bstars'] = businessObj.stars
+    attrs['city'] = businessObj.city
     reviewObj = Review(**attrs)
     DBSession.add(reviewObj)
     
