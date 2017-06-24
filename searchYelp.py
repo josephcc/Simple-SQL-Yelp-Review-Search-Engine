@@ -8,6 +8,9 @@ from modelYelp import *
 from sqlalchemy import text as Text
 from operator import *
 
+from nltk.stem.porter import *
+stemmer = PorterStemmer()
+
 
 avgDL = engine.execute(Text('select avg(review_count) from business;')).first()[0]
 avgDL = float(avgDL)
@@ -128,11 +131,13 @@ def search(keywords, city):
     raw = sql % tuple(binds)
 
     results = engine.execute(Text(raw))
+    i = 0
     for result in results:
+        i += 1
         business_id, name, stars, review_count, score = result[:5]
         counts = result[5:]
         print '-' *55
-        print name, stars, '/', review_count, '%.4f' % score,
+        print '[%d]' % i, name, stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
 
         print '-' *55
@@ -152,7 +157,10 @@ if __name__ == '__main__':
     city, stuff = sys.argv[1], sys.argv[2:]
     assert(len(stuff) % 2 ==0)
     keywords = stuff[::2]
+    keywords = map(stemmer.stem, keywords)
     weights = map(float, stuff[1::2])
+
+    print list(zip(keywords, weights)), city
 
     search(list(zip(keywords, weights)), city)
 
