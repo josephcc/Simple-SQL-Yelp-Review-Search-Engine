@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import sys
+import json
 import string
 from itertools import *
 from operator import *
@@ -81,7 +82,7 @@ def search(keywords, city):
     raw = sql % tuple(binds)
     print raw
     reviews = engine.execute(Text(raw))
-    # print reviews.keys() [u'row', u'business_id', u'review_id', u'score', u'text', u'korean', u'vegan', u'street', u'pork']
+
     reviews = list(reviews)
     review_ids = map(itemgetter(2), reviews)
     reviews = {business_id: list(reviews) for business_id, reviews in groupby(reviews, key=itemgetter(1))}
@@ -95,24 +96,48 @@ def search(keywords, city):
     index = list(engine.execute(Text(raw)))
     time = timeit.default_timer() - START
     print 'INDEX TIME:', time
-    print list(index)
 
+    # this is absolutely unreadable
+    index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
+
+    _business = []
+    _review = {}
+    _index = {}
     i = 0
     for rank in ranks:
         i += 1
         business_id, name, stars, review_count, score = rank[:5]
         counts = rank[5:]
+        bobj = {
+            'name': name,
+            'stars': stars,
+            'num_reviews': review_count,
+            'business_id': business_id,
+            'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
+        }
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
         print '-' *55
+        robj = []
         for review in reviews[business_id]:
-            row, _business_id, review_id, score, text = review[:5]
+            row, _business_id, review_id, score, stars, document_length, text = review[:7]
             assert(_business_id == business_id)
-            counts = review[5:]
+            counts = review[7:]
             print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
             print text[:1000].encode('utf8')
             print '=='
+            robj.append({
+                'text': text,
+                'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
+                'num_words': document_length,
+                'stars': stars,
+                'review_id': review_id
+            })
+        _review[business_id] = robj
+        _business.append(bobj)
+
+    return {'business': _business, 'review': _review, 'index': index}
 
 if __name__ == '__main__':
     print sys.argv
@@ -128,5 +153,6 @@ if __name__ == '__main__':
     keywords = filter(lambda keyword: keyword[1] != 0, keywords)
 
     print keywords, city
-    search(keywords, city)
+    payload = search(keywords, city)
+    print json.dumps(payload)
 

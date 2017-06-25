@@ -34,7 +34,8 @@ WITH aggregate AS (
         ( {{keyword[1]}} * aggregate.{{keyword[0][0]}} ) / GREATEST(1, document_length) {% if not loop.last %} + {% endif %}
     {%- endfor %}
     ) AS score,
-
+    review.stars,
+    document_length,
     review.text,
       {%- for keyword in keywords %}
           aggregate.{{keyword[0][0]}} {% if not loop.last %},{% endif %}

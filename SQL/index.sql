@@ -10,4 +10,4 @@ WHERE review_id IN
         {%- endfor %}{%- if not loop.last %}, {%- endif %}
     {%- endfor %}) AND 
     city = '{{city}}'
-ORDER BY review_id, token, start;
+ORDER BY review_id, start;
