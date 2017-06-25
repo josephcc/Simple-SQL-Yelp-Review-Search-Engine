@@ -50,14 +50,17 @@ class Index(DeclarativeBase):
     token = Column(String, index=True)
     business_id = Column(String, index=True)
     review_id = Column(String, index=True)
-    index = Column(Integer)
+    index = Column(Integer, index=True)
     start = Column(Integer)
     end = Column(Integer)
     city = Column(String, index=True)
     isName = Column(Boolean, index=True)
 
 
-    __table_args__ = (Index('idx_token_city_isName', 'token', 'city', 'isName'),)
+    __table_args__ = (
+        Index('idx_token_city_isName', 'token', 'city', 'isName'),
+        Index('idx_business_review', 'business_id', 'review_id')
+    )
 
 
 DATABASE = {
