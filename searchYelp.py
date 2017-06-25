@@ -30,11 +30,17 @@ WITH innerView AS (
     SELECT
         business_id,
         {%- for keyword in keywords %}
-            COUNT(DISTINCT CASE WHEN token = '{{keyword[0]}}' then review_id else NULL end ) AS {{keyword[0]}}{% if not loop.last %},{% endif %}
+            COUNT(DISTINCT CASE WHEN (
+            {%- for token in keyword[0] %}
+                token = '{{token}}' {% if not loop.last %} OR {% endif %}
+            {%- endfor %}  
+            ) THEN review_id ELSE NULL END ) AS {{keyword[0][0]}}{% if not loop.last %},{% endif %}
         {%- endfor %}  
     FROM index WHERE
         ({%- for keyword in keywords %}
-            token = '{{keyword[0]}}'{% if not loop.last %} OR {% endif %}
+            {%- for token in keyword[0] %}
+                token = '{{token}}'{% if not loop.last %} OR {% endif %}
+            {%- endfor %}{% if not loop.last %} OR {% endif %}
         {%- endfor %}
         ) AND
         city = '{{city}}' 
@@ -46,81 +52,21 @@ SELECT
     business.stars,
     business.review_count,
     (({% for positive in positives -%}
-        LEAST(1, rank.{{positive[0]}}) {% if not loop.last %} + {% endif %}
+        LEAST(1, rank.{{positive[0][0]}}) {% if not loop.last %} + {% endif %}
     {%- endfor %}) / CAST({{positives|length}} AS float) ) *
     ({%- for keyword in keywords %}
-        (( {{keyword[1]}} * rank.{{keyword[0]}}* ({{k}} + 1)) / 
-        (rank.{{keyword[0]}} + {{k}} * (1 - {{b}} + ({{b}} * business.review_count / {{avgDL}})))) {% if not loop.last %} + {% endif %}
+        (( {{keyword[1]}} * rank.{{keyword[0][0]}}* ({{k}} + 1)) / 
+        (rank.{{keyword[0][0]}} + {{k}} * (1 - {{b}} + ({{b}} * business.review_count / {{avgDL}})))) {% if not loop.last %} + {% endif %}
     {%- endfor %}
     ) AS score,
     {%- for keyword in keywords %}
-        rank.{{keyword[0]}} {% if not loop.last %},{% endif %}
+        rank.{{keyword[0][0]}} {% if not loop.last %},{% endif %}
     {%- endfor %}  
 FROM innerView rank LEFT JOIN business business
 ON rank.business_id = business.business_id
 WHERE business.stars > 2.5 AND business.review_count > 20
 ORDER BY score DESC
 LIMIT {{limit}};
-'''
-
-SQL_RankReview = '''
- WITH innerView AS (
-  SELECT
-    review_id,
-    MAX(index) as document_length,
-    {%- for keyword in keywords %}
-	SUM(CASE WHEN token = '{{keyword[0]}}' then 1 else 0 end ) AS {{keyword[0]}}{% if not loop.last %},{% endif %}
-    {%- endfor %}  
-  FROM index WHERE
-    ({%- for keyword in keywords %}
-	token = '{{keyword[0]}}'{% if not loop.last %} OR {% endif %}
-    {%- endfor %}
-    ) AND
-    city = 'Pittsburgh' AND
-    business_id = '{{business_id}}'
-  GROUP BY review_id
-)
-SELECT
-  rank.review_id,
-    (({% for positive in positives -%}
-        LEAST(1, rank.{{positive[0]}}) {% if not loop.last %} + {% endif %}
-    {%- endfor %}) / CAST({{positives|length}} AS float) ) *
-    ({%- for keyword in keywords %}
-        (( {{keyword[1]}} * rank.{{keyword[0]}}* ({{k}} + 1)) / 
-        (rank.{{keyword[0]}} + {{k}} * (1 - {{b}} + ({{b}} * document_length / {{avgDL}})))) {% if not loop.last %} + {% endif %}
-    {%- endfor %}
-    ) AS score,
-  review.text,
-    {%- for keyword in keywords %}
-        rank.{{keyword[0]}} {% if not loop.last %},{% endif %}
-    {%- endfor %}  
- FROM innerView rank LEFT JOIN review review
-   ON rank.review_id = review.review_id
- ORDER BY score DESC
- LIMIT 3;
-
-'''
-
-
-simplified_score = '''
-      (({% for positive in positives -%}
-          LEAST(1, aggregate.{{positive[0]}}) {% if not loop.last %} + {% endif %}
-      {%- endfor %}) / CAST({{positives|length}} AS float) ) *
-      ({%- for keyword in keywords %}
-          ( {{keyword[1]}} * aggregate.{{keyword[0]}} ) / GREATEST(1, document_length) {% if not loop.last %} + {% endif %}
-      {%- endfor %}
-      ) AS score,
-'''
-
-bm25_score = '''
-    (({% for positive in positives -%}
-        LEAST(1, aggregate.{{positive[0]}}) {% if not loop.last %} + {% endif %}
-    {%- endfor %}) / CAST({{positives|length}} AS float) ) *
-    ({%- for keyword in keywords %}
-        (( {{keyword[1]}} * aggregate.{{keyword[0]}}* ({{k}} + 1)) / 
-        (aggregate.{{keyword[0]}} + {{k}} * (1 - {{b}} + ({{b}} * document_length / {{avgDL}})))) {% if not loop.last %} + {% endif %}
-    {%- endfor %}
-    ) AS score,
 '''
 
 SQL_RankReviewAll = '''
@@ -130,11 +76,17 @@ WITH aggregate AS (
     review_id,
     MAX(index) as document_length,
     {%- for keyword in keywords %}
-	SUM(CASE WHEN token = '{{keyword[0]}}' then 1 else 0 end ) AS {{keyword[0]}}{% if not loop.last %},{% endif %}
+	SUM(CASE WHEN (
+        {%- for token in keyword[0] %}
+            token = '{{token}}' {% if not loop.last %} OR {% endif %}
+        {%- endfor %}  
+        ) THEN 1 ELSE 0 END ) AS {{keyword[0][0]}}{% if not loop.last %},{% endif %}
     {%- endfor %}  
   FROM index WHERE
     ({%- for keyword in keywords %}
-	token = '{{keyword[0]}}'{% if not loop.last %} OR {% endif %}
+        {%- for token in keyword[0] %}
+            token = '{{token}}'{% if not loop.last %} OR {% endif %}
+        {%- endfor %}{% if not loop.last %} OR {% endif %}
     {%- endfor %}
     ) AND
     city = '{{city}}' AND
@@ -148,16 +100,16 @@ WITH aggregate AS (
     aggregate.review_id,
 
     (({% for positive in positives -%}
-        LEAST(1, aggregate.{{positive[0]}}) {% if not loop.last %} + {% endif %}
+        LEAST(1, aggregate.{{positive[0][0]}}) {% if not loop.last %} + {% endif %}
     {%- endfor %}) / CAST({{positives|length}} AS float) ) *
     ({%- for keyword in keywords %}
-        ( {{keyword[1]}} * aggregate.{{keyword[0]}} ) / GREATEST(1, document_length) {% if not loop.last %} + {% endif %}
+        ( {{keyword[1]}} * aggregate.{{keyword[0][0]}} ) / GREATEST(1, document_length) {% if not loop.last %} + {% endif %}
     {%- endfor %}
     ) AS score,
 
     review.text,
       {%- for keyword in keywords %}
-          aggregate.{{keyword[0]}} {% if not loop.last %},{% endif %}
+          aggregate.{{keyword[0][0]}} {% if not loop.last %},{% endif %}
       {%- endfor %}
   FROM aggregate aggregate LEFT JOIN review review
   ON review.city = '{{city}}' AND aggregate.review_id = review.review_id
@@ -196,13 +148,27 @@ WHERE
         review_id = '{{review_id}}'{%- if not loop.last %} OR {%- endif %}
     {%- endfor %}) AND
     ({%- for keyword in keywords %}
-        token = '{{keyword}}'{%- if not loop.last %} OR {%- endif %}
+        {%- for token in keyword[0] %}
+            token = '{{token}}'{%- if not loop.last %} OR {%- endif %}
+        {%- endfor %}{%- if not loop.last %} OR {%- endif %}
     {%- endfor %}) AND 
     city = '{{city}}'
 ORDER BY review_id, token, start;
  '''
 
 def getRankSQL(city, keywords, limit=30):
+
+    keywords = tuple(keywords)
+    print keywords
+    print {
+        'k': k,
+        'b': b,
+        'avgDL': avgDL,
+        'city': city,
+        'keywords': keywords,
+        'positives': filter(lambda keyword: keyword[1] > 0, keywords),
+        'limit': limit
+    }
 
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
         'k': k,
@@ -249,7 +215,7 @@ def getIndexSQL(keywords, review_ids, city):
 
     sql, binds = JSQL.prepare_query(SQL_Index, {
         'review_ids': review_ids,
-        'keywords': map(itemgetter(0), keywords),
+        'keywords': keywords,
         'city': city
     })
     
@@ -262,17 +228,17 @@ def search(keywords, city):
     START = timeit.default_timer()
     sql, binds = getRankSQL(city, keywords)
     raw = sql % tuple(binds)
-
-    results = engine.execute(Text(raw))
-    results = list(results)
+    print raw
+    ranks = engine.execute(Text(raw))
+    ranks = list(ranks)
     time = timeit.default_timer() - START
     print 'RANK LIST TIME:', time
-    print raw
 
     START = timeit.default_timer()
-    business_ids = map(itemgetter(0), results)
+    business_ids = map(itemgetter(0), ranks)
     sql, binds = getReviewAllSQL(business_ids, avgDLReview, city, keywords)
     raw = sql % tuple(binds)
+    print raw
     reviews = engine.execute(Text(raw))
     # print reviews.keys() [u'row', u'business_id', u'review_id', u'score', u'text', u'korean', u'vegan', u'street', u'pork']
     reviews = list(reviews)
@@ -280,22 +246,21 @@ def search(keywords, city):
     reviews = {business_id: list(reviews) for business_id, reviews in groupby(reviews, key=itemgetter(1))}
     time = timeit.default_timer() - START
     print 'Review LIST TIME:', time
-    print raw
 
     START = timeit.default_timer()
     sql, binds = getIndexSQL(keywords, review_ids, city)
     raw = sql % tuple(binds)
-    results = list(engine.execute(Text(raw)))
+    print raw
+    index = list(engine.execute(Text(raw)))
     time = timeit.default_timer() - START
     print 'INDEX TIME:', time
-    print list(results)
-    print raw
+    print list(index)
 
     i = 0
-    for result in results:
+    for rank in ranks:
         i += 1
-        business_id, name, stars, review_count, score = result[:5]
-        counts = result[5:]
+        business_id, name, stars, review_count, score = rank[:5]
+        counts = rank[5:]
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
@@ -315,7 +280,9 @@ if __name__ == '__main__':
     city, stuff = sys.argv[1], sys.argv[2:]
     assert(len(stuff) % 2 ==0)
     keywords = stuff[::2]
-    keywords = map(stemmer.stem, keywords)
+    keywords = [map(stemmer.stem, keyword.split(',')) for keyword in keywords]
+    keywords = map(set, keywords)
+    keywords = map(list, keywords)
     weights = map(float, stuff[1::2])
 
     keywords = list(zip(keywords, weights))
