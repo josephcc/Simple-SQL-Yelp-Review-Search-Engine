@@ -137,7 +137,7 @@ WITH aggregate AS (
 	token = '{{keyword[0]}}'{% if not loop.last %} OR {% endif %}
     {%- endfor %}
     ) AND
-    city = 'Pittsburgh' AND
+    city = '{{city}}' AND
     ({%- for business_id in business_ids %}
         business_id = '{{business_id}}'{%- if not loop.last %} OR {%- endif %}
     {%- endfor %})
