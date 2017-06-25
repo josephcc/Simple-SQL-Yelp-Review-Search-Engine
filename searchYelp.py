@@ -30,17 +30,17 @@ WITH innerView AS (
     SELECT
         business_id,
         {%- for keyword in keywords %}
-            COUNT(DISTINCT CASE WHEN (
+            COUNT(DISTINCT CASE WHEN token IN (
             {%- for token in keyword[0] %}
-                token = '{{token}}' {% if not loop.last %} OR {% endif %}
+                '{{token}}'{% if not loop.last %}, {% endif %}
             {%- endfor %}  
             ) THEN review_id ELSE NULL END ) AS {{keyword[0][0]}}{% if not loop.last %},{% endif %}
         {%- endfor %}  
-    FROM index WHERE
-        ({%- for keyword in keywords %}
+    FROM index WHERE token IN (
+        {%- for keyword in keywords %}
             {%- for token in keyword[0] %}
-                token = '{{token}}'{% if not loop.last %} OR {% endif %}
-            {%- endfor %}{% if not loop.last %} OR {% endif %}
+                '{{token}}'{% if not loop.last %}, {% endif %}
+            {%- endfor %}{% if not loop.last %}, {% endif %}
         {%- endfor %}
         ) AND
         city = '{{city}}' 
@@ -76,22 +76,22 @@ WITH aggregate AS (
     review_id,
     MAX(index) as document_length,
     {%- for keyword in keywords %}
-	SUM(CASE WHEN (
+	SUM(CASE WHEN token IN (
         {%- for token in keyword[0] %}
-            token = '{{token}}' {% if not loop.last %} OR {% endif %}
+            '{{token}}'{%- if not loop.last %}, {%- endif %}
         {%- endfor %}  
         ) THEN 1 ELSE 0 END ) AS {{keyword[0][0]}}{% if not loop.last %},{% endif %}
     {%- endfor %}  
-  FROM index WHERE
+  FROM index WHERE token IN
     ({%- for keyword in keywords %}
         {%- for token in keyword[0] %}
-            token = '{{token}}'{% if not loop.last %} OR {% endif %}
-        {%- endfor %}{% if not loop.last %} OR {% endif %}
+            '{{token}}'{% if not loop.last %}, {% endif %}
+        {%- endfor %}{% if not loop.last %}, {% endif %}
     {%- endfor %}
     ) AND
-    city = '{{city}}' AND
+    city = '{{city}}' AND business_id IN
     ({%- for business_id in business_ids %}
-        business_id = '{{business_id}}'{%- if not loop.last %} OR {%- endif %}
+        '{{business_id}}'{%- if not loop.last %}, {%- endif %}
     {%- endfor %})
   GROUP BY business_id, review_id
 ), rank AS (
@@ -129,9 +129,9 @@ SQL_ReviewDL = '''
 WITH innterView AS (
     SELECT review_id, business_id, max(index)
     FROM index
-    WHERE
+    WHERE business_id IN
     ({%- for business_id in business_ids %}
-        business_id = '{{business_id}}'{%- if not loop.last %} OR {%- endif %}
+        '{{business_id}}'{%- if not loop.last %}, {%- endif %}
     {%- endfor %})
     GROUP BY review_id, business_id
 )
@@ -143,14 +143,14 @@ GROUP BY business_id;
 SQL_Index = '''
 SELECT review_id, token, start, "end"
 FROM index
-WHERE
+WHERE review_id IN
     ({%- for review_id in review_ids %}
-        review_id = '{{review_id}}'{%- if not loop.last %} OR {%- endif %}
-    {%- endfor %}) AND
+        '{{review_id}}'{%- if not loop.last %}, {%- endif %}
+    {%- endfor %}) AND token IN
     ({%- for keyword in keywords %}
         {%- for token in keyword[0] %}
-            token = '{{token}}'{%- if not loop.last %} OR {%- endif %}
-        {%- endfor %}{%- if not loop.last %} OR {%- endif %}
+            '{{token}}'{%- if not loop.last %}, {%- endif %}
+        {%- endfor %}{%- if not loop.last %}, {%- endif %}
     {%- endfor %}) AND 
     city = '{{city}}'
 ORDER BY review_id, token, start;
@@ -265,7 +265,6 @@ def search(keywords, city):
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
         print '-' *55
-        print reviews
         for review in reviews[business_id]:
             row, _business_id, review_id, score, text = review[:5]
             assert(_business_id == business_id)
