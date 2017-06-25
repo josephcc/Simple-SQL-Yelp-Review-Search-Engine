@@ -160,7 +160,7 @@ WITH aggregate AS (
           aggregate.{{keyword[0]}} {% if not loop.last %},{% endif %}
       {%- endfor %}
   FROM aggregate aggregate LEFT JOIN review review
-  ON aggregate.review_id = review.review_id
+  ON review.city = '{{city}}' AND aggregate.review_id = review.review_id
 ), label AS (
   SELECT
     ROW_NUMBER() OVER(PARTITION BY rank.business_id ORDER BY rank.score DESC) AS row,
@@ -267,21 +267,31 @@ def search(keywords, city):
     results = list(results)
     time = timeit.default_timer() - START
     print 'RANK LIST TIME:', time
+    print raw
 
     START = timeit.default_timer()
     business_ids = map(itemgetter(0), results)
     sql, binds = getReviewAllSQL(business_ids, avgDLReview, city, keywords)
     raw = sql % tuple(binds)
-
     reviews = engine.execute(Text(raw))
     # print reviews.keys() [u'row', u'business_id', u'review_id', u'score', u'text', u'korean', u'vegan', u'street', u'pork']
     reviews = list(reviews)
+    review_ids = map(itemgetter(2), reviews)
     reviews = {business_id: list(reviews) for business_id, reviews in groupby(reviews, key=itemgetter(1))}
     time = timeit.default_timer() - START
     print 'Review LIST TIME:', time
+    print raw
+
+    START = timeit.default_timer()
+    sql, binds = getIndexSQL(keywords, review_ids, city)
+    raw = sql % tuple(binds)
+    results = list(engine.execute(Text(raw)))
+    time = timeit.default_timer() - START
+    print 'INDEX TIME:', time
+    print list(results)
+    print raw
 
     i = 0
-    review_ids = []
     for result in results:
         i += 1
         business_id, name, stars, review_count, score = result[:5]
@@ -295,19 +305,9 @@ def search(keywords, city):
             row, _business_id, review_id, score, text = review[:5]
             assert(_business_id == business_id)
             counts = review[5:]
-            review_ids.append(review_id)
             print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
             print text[:1000].encode('utf8')
             print '=='
-
-    START = timeit.default_timer()
-    sql, binds = getIndexSQL(keywords, review_ids, city)
-    raw = sql % tuple(binds)
-    results = list(engine.execute(Text(raw)))
-    time = timeit.default_timer() - START
-    print 'INDEX TIME:', time
-    print list(results)
-    print raw
 
 import sys
 if __name__ == '__main__':

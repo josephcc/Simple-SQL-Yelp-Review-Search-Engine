@@ -12,7 +12,7 @@ class Business(DeclarativeBase):
 
     business_id = Column(String, primary_key=True)
     stars = Column(Float, index=True)
-    review_count = Column(Integer)
+    review_count = Column(Integer, index=True)
     name = Column(String)
     state = Column(String, index=True)
     city = Column(String, index=True)
