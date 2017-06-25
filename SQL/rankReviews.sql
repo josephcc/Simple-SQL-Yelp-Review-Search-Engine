@@ -2,7 +2,6 @@ WITH aggregate AS (
   SELECT
     business_id,
     review_id,
-    MAX(index) as document_length,
     {%- for keyword in keywords %}
 	SUM(CASE WHEN token IN (
         {%- for token in keyword[0] %}
@@ -31,11 +30,10 @@ WITH aggregate AS (
         LEAST(1, aggregate.{{positive[0][0]}}) {% if not loop.last %} + {% endif %}
     {%- endfor %}) / CAST({{positives|length}} AS float) ) *
     ({%- for keyword in keywords %}
-        ( {{keyword[1]}} * aggregate.{{keyword[0][0]}} ) / GREATEST(1, document_length) {% if not loop.last %} + {% endif %}
+        ( {{keyword[1]}} * aggregate.{{keyword[0][0]}} ) {% if not loop.last %} + {% endif %}
     {%- endfor %}
     ) AS score,
     review.stars,
-    document_length,
     review.text,
       {%- for keyword in keywords %}
           aggregate.{{keyword[0][0]}} {% if not loop.last %},{% endif %}

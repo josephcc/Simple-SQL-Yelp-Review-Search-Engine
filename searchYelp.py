@@ -121,16 +121,15 @@ def search(keywords, city):
         print '-' *55
         robj = []
         for review in reviews[business_id]:
-            row, _business_id, review_id, score, stars, document_length, text = review[:7]
+            row, _business_id, review_id, score, stars, text = review[:6]
             assert(_business_id == business_id)
-            counts = review[7:]
+            counts = review[6:]
             print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
             print text[:1000].encode('utf8')
             print '=='
             robj.append({
                 'text': text,
                 'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
-                'num_words': document_length,
                 'stars': stars,
                 'review_id': review_id
             })
