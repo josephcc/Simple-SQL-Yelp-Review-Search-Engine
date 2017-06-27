@@ -1,5 +1,11 @@
 # coding: utf-8
 
+from flask import Flask
+from flask_cors import CORS, cross_origin
+app = Flask(__name__)
+CORS(app)
+cors = CORS(app, resources={"/search/*": {"origins": "*:*"}})
+
 import sys
 import json
 import string
@@ -30,7 +36,7 @@ SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_Index = open('SQL/index.sql').read()
 
-def getRankSQL(city, keywords, limit=20):
+def getRankSQL(city, keywords, limit=30):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
         'k': k,
         'b': b,
@@ -66,11 +72,12 @@ def getIndexSQL(keywords, review_ids, city):
 
 
 def search(keywords, city):
+    print keywords, city
 
     START = timeit.default_timer()
     sql, binds = getRankSQL(city, keywords)
     raw = sql % tuple(binds)
-    print raw
+    #print raw
     ranks = engine.execute(Text(raw))
     ranks = list(ranks)
     time = timeit.default_timer() - START
@@ -80,7 +87,7 @@ def search(keywords, city):
     business_ids = map(itemgetter(0), ranks)
     sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords)
     raw = sql % tuple(binds)
-    print raw
+    #print raw
     reviews = engine.execute(Text(raw))
 
     reviews = list(reviews)
@@ -92,7 +99,7 @@ def search(keywords, city):
     START = timeit.default_timer()
     sql, binds = getIndexSQL(keywords, review_ids, city)
     raw = sql % tuple(binds)
-    print raw
+    #print raw
     index = list(engine.execute(Text(raw)))
     time = timeit.default_timer() - START
     print 'INDEX TIME:', time
@@ -115,18 +122,22 @@ def search(keywords, city):
             'business_id': business_id,
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
+        '''
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
         print '-' *55
+        '''
         robj = []
         for review in reviews[business_id]:
             row, _business_id, review_id, score, stars, text = review[:6]
-            assert(_business_id == business_id)
+            #assert(_business_id == business_id)
             counts = review[6:]
+            '''
             print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
             print text[:1000].encode('utf8')
             print '=='
+            '''
             robj.append({
                 'text': text,
                 'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
@@ -135,23 +146,26 @@ def search(keywords, city):
             })
         _review[business_id] = robj
         _business.append(bobj)
+    print
 
-    return {'business': _business, 'review': _review, 'index': index}
+    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords}
 
-if __name__ == '__main__':
-    print sys.argv
-    city, stuff = sys.argv[1], sys.argv[2:]
-    assert(len(stuff) % 2 ==0)
-    keywords = stuff[::2]
+@app.route("/search/<city>/<keywords>/<weights>")
+@cross_origin(origin='*')
+def api_search(city, keywords, weights):
+    print keywords
+    keywords = keywords.split('|')
+    rawKeywords = keywords
     keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
-    keywords = map(set, keywords)
-    keywords = map(list, keywords)
-    weights = map(float, stuff[1::2])
+    rawKeywords = [map(string.strip, keyword.split(',')) for keyword in rawKeywords]
+    weights = map(float, weights.split('|'))
 
     keywords = list(zip(keywords, weights))
-    keywords = filter(lambda keyword: keyword[1] != 0, keywords)
+    rawKeywords = list(zip(rawKeywords, weights))
 
-    print keywords, city
     payload = search(keywords, city)
-    print json.dumps(payload)
+    print payload['keywords']
+    print rawKeywords
+    payload['keywords'] = rawKeywords
+    return json.dumps(payload)
 
