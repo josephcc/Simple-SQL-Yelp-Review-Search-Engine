@@ -12,6 +12,7 @@ def loadModel(fn):
     global model
     model = Doc2Vec.load(fn)
     return model
+loadModel('./models/yelp.model')
 
 from gensim import matutils
 from numpy import dot
@@ -72,8 +73,6 @@ def search(keywords, topn=10):
 
         print
 
-
-loadModel('yelp.model')
 
 #search([('innovation', 2), ('creativity', 1), ('brainstorming', 1), ('crowdsourcing', 1)], topn=50)
 #search([('innovation', 2), ('creativity', 1), ('crowdsourcing', 1)], topn=100)

@@ -20,6 +20,9 @@ JSQL = JinjaSql()
 from modelYelp import *
 from sqlalchemy import text as Text
 
+from gensim.models.doc2vec import Doc2Vec
+model = Doc2Vec.load('./models/yelp.model')
+
 from nltk.stem.porter import *
 stemmer = PorterStemmer()
 
@@ -35,6 +38,7 @@ b = 0.75
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_Index = open('SQL/index.sql').read()
+SQL_TermFreq = open('./SQL/termFreq.sql').read()
 
 def getRankSQL(city, keywords, limit=30):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
@@ -168,4 +172,36 @@ def api_search(city, keywords, weights):
     print rawKeywords
     payload['keywords'] = rawKeywords
     return json.dumps(payload)
+
+@app.route("/expand/<city>/<keywords>")
+@cross_origin(origin='*')
+def api_expand(city, keywords):
+    keywords = map(string.strip, keywords.split(','))
+    print keywords
+    candidates = model.most_similar(keywords, topn=100)
+    seen = set(map(stemmer.stem, keywords))
+    out = []
+    for candidate, score in candidates:
+        if stemmer.stem(candidate) not in seen:
+            out.append([candidate, score])
+            seen.add(stemmer.stem(candidate))
+
+    sql, binds = JSQL.prepare_query(SQL_TermFreq, {'city': city, 'keywords': map(stemmer.stem, map(itemgetter(0), out))})
+    raw = sql % tuple(binds)
+    terms = engine.execute(Text(raw))
+    terms = {term: list(counts)[0] for term, counts in groupby(list(terms), key=itemgetter(0))}
+
+    out2 = []
+    for term, score in out:
+        stem = stemmer.stem(term)
+        if stem in terms:
+            _, count, review_count, business_count = terms[stem]
+        else:
+            count, review_count, business_count = 0, 0, 0
+
+        if count == 0:
+            continue
+        out2.append({'keyword': term, 'score': score, 'count': count, 'review_count': review_count, 'business_count': business_count})
+
+    return json.dumps(out2)
 
