@@ -24,7 +24,7 @@ for business in open(businessFilePath):
         print '%.2f%%' % (100.0 * _n / 144072), 
         sys.stdout.flush()
     business = json.loads(business)
-    if business['categories'] == None or 'Restaurants' not in business['categories']:
+    if business['categories'] == None or 'Restaurants' not in business['categories'] or business['is_open'] == 0:
         continue
 
     businessObj = {k:business[k] for k in ['business_id', 'stars', 'name', 'review_count', 'state', 'city']}
@@ -49,7 +49,7 @@ DBSession.commit()
 print
 print n
         
-
+'''
 
 # In[4]:
 
@@ -81,3 +81,4 @@ DBSession.commit()
 print 'done'
 print n
 
+'''

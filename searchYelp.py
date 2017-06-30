@@ -131,7 +131,6 @@ def search(keywords, city):
 
     _business = []
     _review = {}
-    _index = {}
     i = 0
     for rank in ranks:
         i += 1
@@ -243,4 +242,51 @@ def api_business(city, keyword):
         out.append({'business_id': business_id, 'name': name})
 
     return json.dumps(out)
+
+@app.route("/reviews/<business_id>/<city>/<keywords>/<weights>")
+@cross_origin(origin='*')
+def api_reviews(business_id, city, keywords, weights):
+    print keywords
+    keywords = keywords.split('|')
+    rawKeywords = keywords
+    keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
+    weights = map(float, weights.split('|'))
+    keywords = list(zip(keywords, weights))
+
+
+    START = timeit.default_timer()
+    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=15)
+    raw = sql % tuple(binds)
+    #print raw
+    reviews = engine.execute(Text(raw))
+    #[u'row', u'business_id', u'review_id', u'score', u'stars', u'text', u'relax', u'thai', u'noodl']
+    reviews = list(reviews)
+    review_ids = map(itemgetter(2), reviews)
+    time = timeit.default_timer() - START
+    print 'Review LIST TIME:', time
+
+    _review = []
+    for review in reviews:
+        counts = review[6:]
+        _review.append({
+            'text': review[5],
+            'review_id': review[2],
+            'stars': review[4],
+            'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
+        })
+
+
+    START = timeit.default_timer()
+    sql, binds = getIndexSQL(keywords, review_ids, city)
+    raw = sql % tuple(binds)
+    #print raw
+    index = list(engine.execute(Text(raw)))
+    time = timeit.default_timer() - START
+    print 'INDEX TIME:', time
+
+    # this is absolutely unreadable
+    index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
+
+    return json.dumps({'index': index, 'review': _review})
+
 
