@@ -39,6 +39,8 @@ SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_Index = open('SQL/index.sql').read()
 SQL_TermFreq = open('./SQL/termFreq.sql').read()
+SQL_Business = open('./SQL/business.sql').read()
+SQL_Category = open('./SQL/category.sql').read()
 
 def getRankSQL(city, keywords, limit=30):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
@@ -73,6 +75,12 @@ def getIndexSQL(keywords, review_ids, city):
     })
     return sql, binds
 
+def getCategorySQL(business_ids):
+    sql, binds = JSQL.prepare_query(SQL_Category, {
+        'business_ids': business_ids
+    })
+    return sql, binds
+
 
 
 def search(keywords, city):
@@ -100,6 +108,16 @@ def search(keywords, city):
     time = timeit.default_timer() - START
     print 'Review LIST TIME:', time
 
+
+    START = timeit.default_timer()
+    sql, binds = getCategorySQL(business_ids)
+    raw = sql % tuple(binds)
+    #print raw
+    results = engine.execute(Text(raw))
+    categories = {business_id: categories.split('|') for business_id, categories in results}
+    time = timeit.default_timer() - START
+    print 'Category LIST TIME:', time
+
     START = timeit.default_timer()
     sql, binds = getIndexSQL(keywords, review_ids, city)
     raw = sql % tuple(binds)
@@ -124,8 +142,11 @@ def search(keywords, city):
             'stars': stars,
             'num_reviews': review_count,
             'business_id': business_id,
+            'categories': [],
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
+        if business_id in categories:
+            bobj['categories'] = categories[business_id]
         '''
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
@@ -204,4 +225,22 @@ def api_expand(city, keywords):
         out2.append({'keyword': term, 'score': score, 'count': count, 'review_count': review_count, 'business_count': business_count})
 
     return json.dumps(out2)
+
+
+@app.route("/business/<city>/<keyword>")
+@cross_origin(origin='*')
+def api_business(city, keyword):
+    print keyword
+    sql, binds = JSQL.prepare_query(SQL_Business, {'city': city, 'name': keyword, 'N': 5})
+    print sql
+    print binds
+    raw = sql % tuple(binds)
+    business = engine.execute(Text(raw))
+    business = list(business)
+
+    out = []
+    for business_id, name in business:
+        out.append({'business_id': business_id, 'name': name})
+
+    return json.dumps(out)
 
