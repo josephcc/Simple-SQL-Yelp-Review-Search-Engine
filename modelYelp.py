@@ -72,8 +72,9 @@ DATABASE = {
   'database': 'YELP'
 }
 
+from sqlalchemy.pool import QueuePool
 
-engine = create_engine(URL(**DATABASE))
+engine = create_engine(URL(**DATABASE), pool_size=30, max_overflow=10, poolclass=QueuePool)
 DeclarativeBase.metadata.create_all(engine)
 
 from sqlalchemy.orm import scoped_session, sessionmaker
