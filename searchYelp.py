@@ -132,6 +132,7 @@ def search(keywords, city):
     _business = []
     _review = {}
     i = 0
+    _counts = {keyword[0]: 0 for keyword in map(itemgetter(0), keywords)}
     for rank in ranks:
         i += 1
         business_id, name, stars, review_count, score = rank[:5]
@@ -144,8 +145,13 @@ def search(keywords, city):
             'categories': [],
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
+        for idx in range(len(counts)):
+            if counts[idx] > 0:
+                _counts[keywords[idx][0][0]] += 1
+
         if business_id in categories:
             bobj['categories'] = categories[business_id]
+
         '''
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
@@ -172,7 +178,7 @@ def search(keywords, city):
         _business.append(bobj)
     print
 
-    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords}
+    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts}
 
 @app.route("/search/<city>/<keywords>/<weights>")
 @cross_origin(origin='*')
