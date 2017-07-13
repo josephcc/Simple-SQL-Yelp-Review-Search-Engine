@@ -37,6 +37,7 @@ b = 0.75
 
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
+SQL_GetReview = open('SQL/getReviews.sql').read()
 SQL_Index = open('SQL/index.sql').read()
 SQL_TermFreq = open('./SQL/termFreq.sql').read()
 SQL_Business = open('./SQL/business.sql').read()
@@ -63,6 +64,14 @@ def getReviewSQL(business_ids, avgDL, city, keywords, limit=3):
         'keywords': keywords,
         'positives': filter(lambda keyword: keyword[1] > 0, keywords),
         'business_ids': business_ids,
+        'limit': limit
+    })
+    return sql, binds
+
+def getBusinessReviewSQL(business_id, city, limit=20):
+    sql, binds = JSQL.prepare_query(SQL_GetReview, {
+        'city': city,
+        'business_id': business_id,
         'limit': limit
     })
     return sql, binds
@@ -294,5 +303,32 @@ def api_reviews(business_id, city, keywords, weights):
     index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
 
     return json.dumps({'index': index, 'review': _review})
+
+@app.route("/reviews/<business_id>/<city>/")
+@cross_origin(origin='*')
+def api_reviews_business(business_id, city):
+
+    START = timeit.default_timer()
+    sql, binds = getBusinessReviewSQL(business_id, city, limit=20)
+    raw = sql % tuple(binds)
+    #print raw
+    reviews = engine.execute(Text(raw))
+    #[u'row', u'business_id', u'review_id', u'score', u'stars', u'text', u'relax', u'thai', u'noodl']
+    reviews = list(reviews)
+    review_ids = map(itemgetter(2), reviews)
+    time = timeit.default_timer() - START
+    print 'Review LIST TIME:', time
+
+    _review = []
+    for review in reviews:
+        _review.append({
+            'text': review[2],
+            'review_id': review[0],
+            'stars': review[1],
+            'num_keywords': []
+        })
+
+
+    return json.dumps({'index': {}, 'review': _review})
 
 
