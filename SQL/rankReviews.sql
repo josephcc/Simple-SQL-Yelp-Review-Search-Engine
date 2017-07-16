@@ -9,8 +9,14 @@ WITH aggregate AS (
         {%- endfor %}  
         ) THEN 1 ELSE 0 END ) AS {{keyword[0][0]}}{% if not loop.last %},{% endif %}
     {%- endfor %}  
-  FROM index WHERE
-  city = '{{city}}' AND business_id IN
+  FROM index WHERE token IN
+    ({%- for keyword in keywords %}
+        {%- for token in keyword[0] %}
+            '{{token}}'{% if not loop.last %}, {% endif %}
+        {%- endfor %}{% if not loop.last %}, {% endif %}
+    {%- endfor %}
+    ) AND
+    city = '{{city}}' AND business_id IN
     ({%- for business_id in business_ids %}
         '{{business_id}}'{%- if not loop.last %}, {%- endif %}
     {%- endfor %})
