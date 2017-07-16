@@ -106,7 +106,7 @@ def search(keywords, city):
 
     START = timeit.default_timer()
     business_ids = map(itemgetter(0), ranks)
-    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords)
+    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=2)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
