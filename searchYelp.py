@@ -21,7 +21,7 @@ from modelYelp import *
 from sqlalchemy import text as Text
 
 from gensim.models.doc2vec import Doc2Vec
-model = Doc2Vec.load('./models/yelp.model')
+#model = Doc2Vec.load('./models/yelp.model')
 
 from nltk.stem.porter import *
 stemmer = PorterStemmer()
@@ -311,7 +311,7 @@ def api_reviews_business(business_id, city):
     START = timeit.default_timer()
     sql, binds = getBusinessReviewSQL(business_id, city, limit=20)
     raw = sql % tuple(binds)
-    #print raw
+    print raw
     reviews = engine.execute(Text(raw))
     #[u'row', u'business_id', u'review_id', u'score', u'stars', u'text', u'relax', u'thai', u'noodl']
     reviews = list(reviews)
