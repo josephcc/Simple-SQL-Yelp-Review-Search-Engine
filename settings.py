@@ -1,2 +1,2 @@
-CHIPath =  '/Users/josephcc/git/lab/scholar/corpus/SIGCHI'
-CSCWPath = '/Users/josephcc/git/lab/scholar/corpus/CSCW'
+CHIPath =  '/home/josephcc/git/lab/searchEngine/corpus/SIGCHI'
+CSCWPath = '/home/josephcc/git/lab/searchEngine/corpus/CSCW'

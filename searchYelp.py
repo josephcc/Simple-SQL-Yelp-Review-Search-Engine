@@ -43,12 +43,13 @@ SQL_TermFreq = open('./SQL/termFreq.sql').read()
 SQL_Business = open('./SQL/business.sql').read()
 SQL_Category = open('./SQL/category.sql').read()
 
-def getRankSQL(city, keywords, limit=30):
+def getRankSQL(city, keywords, stars, limit=20):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
         'k': k,
         'b': b,
         'avgDL': avgDL,
         'city': city,
+        'stars': stars,
         'keywords': keywords,
         'positives': filter(lambda keyword: keyword[1] > 0, keywords),
         'limit': limit
@@ -92,11 +93,11 @@ def getCategorySQL(business_ids):
 
 
 
-def search(keywords, city):
+def search(keywords, city, stars):
     print keywords, city
 
     START = timeit.default_timer()
-    sql, binds = getRankSQL(city, keywords)
+    sql, binds = getRankSQL(city, keywords, stars)
     raw = sql % tuple(binds)
     #print raw
     ranks = engine.execute(Text(raw))
@@ -189,9 +190,9 @@ def search(keywords, city):
 
     return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts}
 
-@app.route("/search/<city>/<keywords>/<weights>")
+@app.route("/search/<city>/<stars>/<keywords>/<weights>")
 @cross_origin(origin='*')
-def api_search(city, keywords, weights):
+def api_search(city, stars, keywords, weights):
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -202,7 +203,7 @@ def api_search(city, keywords, weights):
     keywords = list(zip(keywords, weights))
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city)
+    payload = search(keywords, city, stars)
     print payload['keywords']
     print rawKeywords
     payload['keywords'] = rawKeywords
