@@ -36,6 +36,6 @@ SELECT
     {%- endfor %}  
 FROM innerView rank LEFT JOIN business business
 ON rank.business_id = business.business_id
-WHERE business.stars >= {{stars}} AND business.review_count > 20
+WHERE business.stars >= {{stars}} AND business.review_count > 15
 ORDER BY score DESC
 LIMIT {{limit}};

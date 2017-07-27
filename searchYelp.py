@@ -201,6 +201,7 @@ def api_search(city, stars, keywords, weights):
     weights = map(float, weights.split('|'))
 
     keywords = list(zip(keywords, weights))
+    keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
     payload = search(keywords, city, stars)
@@ -271,7 +272,7 @@ def api_reviews(business_id, city, keywords, weights):
 
 
     START = timeit.default_timer()
-    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=15)
+    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=30)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
@@ -310,7 +311,7 @@ def api_reviews(business_id, city, keywords, weights):
 def api_reviews_business(business_id, city):
 
     START = timeit.default_timer()
-    sql, binds = getBusinessReviewSQL(business_id, city, limit=20)
+    sql, binds = getBusinessReviewSQL(business_id, city, limit=30)
     raw = sql % tuple(binds)
     print raw
     reviews = engine.execute(Text(raw))
