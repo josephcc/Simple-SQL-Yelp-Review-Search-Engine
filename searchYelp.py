@@ -21,7 +21,11 @@ from modelYelp import *
 from sqlalchemy import text as Text
 
 from gensim.models.doc2vec import Doc2Vec
-#model = Doc2Vec.load('./models/yelp.model')
+
+START = timeit.default_timer()
+model = Doc2Vec.load('./models/yelp.model')
+time = timeit.default_timer() - START
+print 'MODEL LOAD TIME:', time
 
 from nltk.stem.porter import *
 stemmer = PorterStemmer()
@@ -104,7 +108,7 @@ def getCategorySQL(business_ids):
 
 
 
-def search(keywords, city, stars):
+def search(keywords, city, stars, allKeywords):
     print keywords, city
 
     START = timeit.default_timer()
@@ -131,14 +135,11 @@ def search(keywords, city, stars):
 
     START = timeit.default_timer()
     _keywords = map(itemgetter(0), map(itemgetter(0), keywords))
-    print _keywords
     sql, binds = getKeywordRatingsSQL(_keywords, business_ids, city)
     raw = sql % tuple(binds)
-    print raw
     results = engine.execute(Text(raw))
     # TODO this is absolutely unreadable
     keywordRatings = {business_id: sorted(map(itemgetter(0, 2, 3, 4), items), key=itemgetter(0)) for business_id, items in groupby(sorted(results, key=itemgetter(1)), itemgetter(1))}
-    print keywordRatings
     time = timeit.default_timer() - START
     print 'KWRatings LIST TIME:', time
 
@@ -160,6 +161,20 @@ def search(keywords, city, stars):
     index = list(engine.execute(Text(raw)))
     time = timeit.default_timer() - START
     print 'INDEX TIME:', time
+
+
+    START = timeit.default_timer()
+
+    _keywords = map(itemgetter(0), map(itemgetter(0), allKeywords))
+    sql, binds = JSQL.prepare_query(SQL_TermFreq, {'city': city, 'keywords': _keywords})
+    raw = sql % tuple(binds)
+    stats = engine.execute(Text(raw))
+    stats = {item[0]: item[-1] for item in stats}
+    stats['__numberOfBusinesses__'] = numberOfBusinesses[city]
+    print stats
+
+    time = timeit.default_timer() - START
+    print 'STATS TIME:', time
 
     # this is absolutely unreadable
     index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
@@ -213,7 +228,7 @@ def search(keywords, city, stars):
         _business.append(bobj)
     print
 
-    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts, 'keywordRatings': keywordRatings}
+    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts, 'keywordRatings': keywordRatings, 'stats': stats}
 
 @app.route("/search/<city>/<stars>/<keywords>/<weights>")
 @cross_origin(origin='*')
@@ -226,13 +241,12 @@ def api_search(city, stars, keywords, weights):
     weights = map(float, weights.split('|'))
 
     keywords = list(zip(keywords, weights))
+    allKeywords = keywords[:]
     keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city, stars)
-    print payload['keywords']
-    print rawKeywords
-    payload['keywords'] = rawKeywords
+    payload = search(keywords, city, stars, allKeywords)
+    #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
 @app.route("/expand/<city>/<keywords>")
