@@ -35,6 +35,8 @@ avgDLReview = 118.666666667
 k = 1.2 # 1.2 - 2.0
 b = 0.75
 
+numberOfBusinesses = dict(list(engine.execute(Text(r'''SELECT city, COUNT(business_id) FROM business GROUP BY city HAVING COUNT(business_id) > 1000;'''))))
+
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_GetReview = open('SQL/getReviews.sql').read()
@@ -42,6 +44,7 @@ SQL_Index = open('SQL/index.sql').read()
 SQL_TermFreq = open('./SQL/termFreq.sql').read()
 SQL_Business = open('./SQL/business.sql').read()
 SQL_Category = open('./SQL/category.sql').read()
+SQL_KeywordRatings = open('./SQL/keywordRatings.sql').read()
 
 def getRankSQL(city, keywords, stars, limit=20):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
@@ -53,6 +56,14 @@ def getRankSQL(city, keywords, stars, limit=20):
         'keywords': keywords,
         'positives': filter(lambda keyword: keyword[1] > 0, keywords),
         'limit': limit
+    })
+    return sql, binds
+
+def getKeywordRatingsSQL(keywords, business_ids, city):
+    sql, binds = JSQL.prepare_query(SQL_KeywordRatings, {
+        'city': city,
+        'business_ids': business_ids,
+        'keywords': keywords
     })
     return sql, binds
 
@@ -118,7 +129,20 @@ def search(keywords, city, stars):
     time = timeit.default_timer() - START
     print 'Review LIST TIME:', time
 
+    START = timeit.default_timer()
+    _keywords = map(itemgetter(0), map(itemgetter(0), keywords))
+    print _keywords
+    sql, binds = getKeywordRatingsSQL(_keywords, business_ids, city)
+    raw = sql % tuple(binds)
+    print raw
+    results = engine.execute(Text(raw))
+    # TODO this is absolutely unreadable
+    keywordRatings = {business_id: sorted(map(itemgetter(0, 2, 3, 4), items), key=itemgetter(0)) for business_id, items in groupby(sorted(results, key=itemgetter(1)), itemgetter(1))}
+    print keywordRatings
+    time = timeit.default_timer() - START
+    print 'KWRatings LIST TIME:', time
 
+    '''
     START = timeit.default_timer()
     sql, binds = getCategorySQL(business_ids)
     raw = sql % tuple(binds)
@@ -127,6 +151,7 @@ def search(keywords, city, stars):
     categories = {business_id: categories.split('|') for business_id, categories in results}
     time = timeit.default_timer() - START
     print 'Category LIST TIME:', time
+    '''
 
     START = timeit.default_timer()
     sql, binds = getIndexSQL(keywords, review_ids, city)
@@ -152,17 +177,17 @@ def search(keywords, city, stars):
             'stars': stars,
             'num_reviews': review_count,
             'business_id': business_id,
-            'categories': [],
+            #'categories': [],
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
         for idx in range(len(counts)):
             if counts[idx] > 0:
                 _counts[keywords[idx][0][0]] += 1
 
+        '''
         if business_id in categories:
             bobj['categories'] = categories[business_id]
 
-        '''
         print '-' *55
         print '[%d]' % i, name.encode('utf8'), stars, '/', review_count, '%.4f' % score,
         print stars, zip(map(itemgetter(0), keywords), counts)
@@ -188,7 +213,7 @@ def search(keywords, city, stars):
         _business.append(bobj)
     print
 
-    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts}
+    return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts, 'keywordRatings': keywordRatings}
 
 @app.route("/search/<city>/<stars>/<keywords>/<weights>")
 @cross_origin(origin='*')
