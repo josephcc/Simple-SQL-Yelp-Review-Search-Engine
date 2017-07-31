@@ -1,0 +1,11 @@
+CREATE INDEX idx_index_reviewid_token_mesa        ON index(review_id, token) WHERE city ='Mesa';
+CREATE INDEX idx_index_reviewid_token_mississauga ON index(review_id, token) WHERE city ='Mississauga';
+CREATE INDEX idx_index_reviewid_token_cleveland   ON index(review_id, token) WHERE city ='Cleveland';
+CREATE INDEX idx_index_reviewid_token_scottsdale  ON index(review_id, token) WHERE city ='Scottsdale';
+CREATE INDEX idx_index_reviewid_token_edinburgh   ON index(review_id, token) WHERE city ='Edinburgh';
+CREATE INDEX idx_index_reviewid_token_pittsburgh  ON index(review_id, token) WHERE city ='Pittsburgh';
+CREATE INDEX idx_index_reviewid_token_charlotte   ON index(review_id, token) WHERE city ='Charlotte';
+CREATE INDEX idx_index_reviewid_token_phoenix     ON index(review_id, token) WHERE city ='Phoenix';
+CREATE INDEX idx_index_reviewid_token_lasvegas    ON index(review_id, token) WHERE city ='Las Vegas';
+CREATE INDEX idx_index_reviewid_token_toronto     ON index(review_id, token) WHERE city ='Toronto';
+CREATE INDEX idx_index_reviewid_token_montreal    ON index(review_id, token) WHERE city ='Montréal';

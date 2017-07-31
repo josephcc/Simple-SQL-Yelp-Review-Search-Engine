@@ -172,7 +172,6 @@ def search(keywords, city, stars, allKeywords):
     stats = {item[0]: item[-1] for item in stats}
     stats['__numberOfBusinesses__'] = numberOfBusinesses[city]
     print stats
-
     time = timeit.default_timer() - START
     print 'STATS TIME:', time
 
