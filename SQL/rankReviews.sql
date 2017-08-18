@@ -38,8 +38,10 @@ WITH aggregate AS (
       {%- for keyword in keywords %}
           aggregate.{{keyword[0][0]}} {% if not loop.last %},{% endif %}
       {%- endfor %}
-  FROM aggregate aggregate LEFT JOIN review review
+  FROM aggregate aggregate
+  LEFT JOIN review review
   ON review.city = '{{city}}' AND aggregate.review_id = review.review_id
+  WHERE review.stars >= '{{stars}}'
 ), label AS (
   SELECT
     ROW_NUMBER() OVER(PARTITION BY rank.business_id ORDER BY rank.score DESC) AS row,

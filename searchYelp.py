@@ -23,7 +23,7 @@ from sqlalchemy import text as Text
 from gensim.models.doc2vec import Doc2Vec
 
 START = timeit.default_timer()
-model = Doc2Vec.load('./models/yelp.model')
+#model = Doc2Vec.load('./models/yelp.model')
 time = timeit.default_timer() - START
 print 'MODEL LOAD TIME:', time
 
@@ -40,6 +40,7 @@ k = 1.2 # 1.2 - 2.0
 b = 0.75
 
 numberOfBusinesses = dict(list(engine.execute(Text(r'''SELECT city, COUNT(business_id) FROM business GROUP BY city HAVING COUNT(business_id) > 1000;'''))))
+print numberOfBusinesses
 
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
@@ -71,7 +72,7 @@ def getKeywordRatingsSQL(keywords, business_ids, city):
     })
     return sql, binds
 
-def getReviewSQL(business_ids, avgDL, city, keywords, limit=3):
+def getReviewSQL(business_ids, avgDL, city, keywords, limit=3, stars=2.5):
     sql, binds = JSQL.prepare_query(SQL_RankReview, {
         'k': k,
         'b': b,
@@ -80,7 +81,8 @@ def getReviewSQL(business_ids, avgDL, city, keywords, limit=3):
         'keywords': keywords,
         'positives': filter(lambda keyword: keyword[1] > 0, keywords),
         'business_ids': business_ids,
-        'limit': limit
+        'limit': limit,
+        'stars': stars
     })
     return sql, binds
 
@@ -122,7 +124,7 @@ def search(keywords, city, stars, allKeywords):
 
     START = timeit.default_timer()
     business_ids = map(itemgetter(0), ranks)
-    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=2)
+    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=2, stars=stars)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
