@@ -5,9 +5,9 @@ SELECT
   review,
   business
 FROM docFreq
-WHERE token in (
+WHERE city = '{{city}}' AND token IN (
   {%- for keyword in keywords %}
       '{{keyword}}'{%- if not loop.last %}, {%- endif %}
   {%- endfor %}
-  ) and city = '{{city}}'
+  )
 

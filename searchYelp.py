@@ -250,6 +250,33 @@ def api_search(city, stars, keywords, weights):
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
+@app.route("/baseline_search/<city>/<stars>/<keywords>/<weights>")
+@cross_origin(origin='*')
+def api_baseline_search(city, stars, keywords, weights):
+    print keywords
+    keywords = keywords.split('|')
+    rawKeywords = keywords
+    keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
+    rawKeywords = [map(string.strip, keyword.split(',')) for keyword in rawKeywords]
+
+    n = float(numberOfBusinesses[city])
+    _keywords = map(itemgetter(0), keywords)
+    sql, binds = JSQL.prepare_query(SQL_TermFreq, {'city': city, 'keywords': _keywords})
+    raw = sql % tuple(binds)
+    stats = engine.execute(Text(raw))
+    stats = {item[0]: n/item[-1] for item in stats}
+    weights = [stats.get(keyword[0], 0.0) for keyword in keywords]
+
+
+    keywords = list(zip(keywords, weights))
+    allKeywords = keywords[:]
+    keywords = filter(lambda k: k[1] != 0, keywords)
+    rawKeywords = list(zip(rawKeywords, weights))
+
+    payload = search(keywords, city, stars, allKeywords)
+    #payload['keywords'] = rawKeywords
+    return json.dumps(payload)
+
 @app.route("/expand/<city>/<keywords>")
 @cross_origin(origin='*')
 def api_expand(city, keywords):
@@ -308,6 +335,61 @@ def api_reviews(business_id, city, keywords, weights):
     rawKeywords = keywords
     keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
     weights = map(float, weights.split('|'))
+    keywords = list(zip(keywords, weights))
+
+
+    START = timeit.default_timer()
+    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=30)
+    raw = sql % tuple(binds)
+    #print raw
+    reviews = engine.execute(Text(raw))
+    #[u'row', u'business_id', u'review_id', u'score', u'stars', u'text', u'relax', u'thai', u'noodl']
+    reviews = list(reviews)
+    review_ids = map(itemgetter(2), reviews)
+    time = timeit.default_timer() - START
+    print 'Review LIST TIME:', time
+
+    _review = []
+    for review in reviews:
+        counts = review[6:]
+        _review.append({
+            'text': review[5],
+            'review_id': review[2],
+            'stars': review[4],
+            'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
+        })
+
+
+    START = timeit.default_timer()
+    sql, binds = getIndexSQL(keywords, review_ids, city)
+    raw = sql % tuple(binds)
+    #print raw
+    index = list(engine.execute(Text(raw)))
+    time = timeit.default_timer() - START
+    print 'INDEX TIME:', time
+
+    # this is absolutely unreadable
+    index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
+
+    return json.dumps({'index': index, 'review': _review})
+
+
+@app.route("/baseline_reviews/<business_id>/<city>/<keywords>/<weights>")
+@cross_origin(origin='*')
+def api_baseline_reviews(business_id, city, keywords, weights):
+    print keywords
+    keywords = keywords.split('|')
+    rawKeywords = keywords
+    keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
+
+    n = float(numberOfBusinesses[city])
+    _keywords = map(itemgetter(0), keywords)
+    sql, binds = JSQL.prepare_query(SQL_TermFreq, {'city': city, 'keywords': _keywords})
+    raw = sql % tuple(binds)
+    stats = engine.execute(Text(raw))
+    stats = {item[0]: n/item[-1] for item in stats}
+    weights = [stats.get(keyword[0], 0.0) for keyword in keywords]
+
     keywords = list(zip(keywords, weights))
 
 
