@@ -1,10 +1,10 @@
 # coding: utf-8
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
 CORS(app)
-cors = CORS(app, resources={"/search/*": {"origins": "*:*"}})
+cors = CORS(app, resources={"/*": {"origins": "*:*"}})
 
 import sys
 import json
@@ -231,9 +231,24 @@ def search(keywords, city, stars, allKeywords):
 
     return {'business': _business, 'review': _review, 'index': index, 'keywords': keywords, 'counts': _counts, 'keywordRatings': keywordRatings, 'stats': stats}
 
-@app.route("/search/<city>/<stars>/<keywords>/<weights>")
-@cross_origin(origin='*')
+def insertLog(logs):
+    obj = Log()
+    obj.turkerId = logs.get('turkerId', '')
+    obj.api = logs.get('api', '')
+    obj.action = logs.get('action', '')
+    obj.content = json.dumps(logs)
+    session = getSession()
+    session.add(obj)
+    session.commit()
+
+@app.route("/search/<city>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_search(city, stars, keywords, weights):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'search'
+        insertLog(logs)
+        print logs
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -250,9 +265,14 @@ def api_search(city, stars, keywords, weights):
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
-@app.route("/baseline_search/<city>/<stars>/<keywords>/<weights>")
-@cross_origin(origin='*')
+@app.route("/baseline_search/<city>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_baseline_search(city, stars, keywords, weights):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'baseline_search'
+        insertLog(logs)
+        print logs
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -277,8 +297,8 @@ def api_baseline_search(city, stars, keywords, weights):
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
-@app.route("/expand/<city>/<keywords>")
-@cross_origin(origin='*')
+@app.route("/expand/<city>/<keywords>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_expand(city, keywords):
     keywords = map(string.strip, keywords.split(','))
     print keywords
@@ -310,9 +330,14 @@ def api_expand(city, keywords):
     return json.dumps(out2)
 
 
-@app.route("/business/<city>/<keyword>")
-@cross_origin(origin='*')
+@app.route("/business/<city>/<keyword>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_business(city, keyword):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'business'
+        insertLog(logs)
+        print logs
     print keyword
     sql, binds = JSQL.prepare_query(SQL_Business, {'city': city, 'name': keyword, 'N': 5})
     print sql
@@ -327,8 +352,8 @@ def api_business(city, keyword):
 
     return json.dumps(out)
 
-@app.route("/reviews/<business_id>/<city>/<keywords>/<weights>")
-@cross_origin(origin='*')
+@app.route("/reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_reviews(business_id, city, keywords, weights):
     print keywords
     keywords = keywords.split('|')
@@ -374,9 +399,14 @@ def api_reviews(business_id, city, keywords, weights):
     return json.dumps({'index': index, 'review': _review})
 
 
-@app.route("/baseline_reviews/<business_id>/<city>/<keywords>/<weights>")
-@cross_origin(origin='*')
+@app.route("/baseline_reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
 def api_baseline_reviews(business_id, city, keywords, weights):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'baseline_reviews'
+        insertLog(logs)
+        print logs
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -428,9 +458,14 @@ def api_baseline_reviews(business_id, city, keywords, weights):
 
     return json.dumps({'index': index, 'review': _review})
 
-@app.route("/reviews/<business_id>/<city>/")
+@app.route("/reviews/<business_id>/<city>", methods=['POST', 'GET'])
 @cross_origin(origin='*')
 def api_reviews_business(business_id, city):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'review_business'
+        insertLog(logs)
+        print logs
 
     START = timeit.default_timer()
     sql, binds = getBusinessReviewSQL(business_id, city, limit=30)

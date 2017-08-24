@@ -63,6 +63,16 @@ class Index(DeclarativeBase):
     )
 
 
+class Log(DeclarativeBase):
+    __tablename__ = 'log'
+
+    id = Column(Integer, primary_key=True)
+    turkerId = Column(String)
+    api = Column(String)
+    action = Column(String)
+    content =  Column(Text)
+
+
 DATABASE = {
   'drivername': 'postgres',
   'host': 'localhost',
