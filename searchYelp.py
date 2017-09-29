@@ -114,7 +114,7 @@ def search(keywords, city, stars, allKeywords):
     print keywords, city
 
     START = timeit.default_timer()
-    sql, binds = getRankSQL(city, keywords, stars)
+    sql, binds = getRankSQL(city, keywords, stars, 10)
     raw = sql % tuple(binds)
     #print raw
     ranks = engine.execute(Text(raw))
@@ -124,7 +124,7 @@ def search(keywords, city, stars, allKeywords):
 
     START = timeit.default_timer()
     business_ids = map(itemgetter(0), ranks)
-    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=2, stars=stars)
+    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=3, stars=stars)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
@@ -236,6 +236,7 @@ def insertLog(logs):
     obj.turkerId = logs.get('turkerId', '')
     obj.api = logs.get('api', '')
     obj.action = logs.get('action', '')
+    obj.condition = logs.get('condition', '')
     obj.content = json.dumps(logs)
     session = getSession()
     session.add(obj)
@@ -355,6 +356,11 @@ def api_business(city, keyword):
 @app.route("/reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_reviews(business_id, city, keywords, weights):
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'reviews'
+        insertLog(logs)
+        print logs
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords

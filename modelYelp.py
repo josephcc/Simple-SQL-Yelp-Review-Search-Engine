@@ -70,7 +70,9 @@ class Log(DeclarativeBase):
     turkerId = Column(String)
     api = Column(String)
     action = Column(String)
+    condition = Column(String)
     content =  Column(Text)
+    last_update = Column(TIMESTAMP, server_default=func.now(), onupdate=func.current_timestamp())
 
 
 DATABASE = {
