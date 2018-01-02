@@ -10,3 +10,5 @@ venv/*
 models/*
 
 *.pyc
+
+joel/

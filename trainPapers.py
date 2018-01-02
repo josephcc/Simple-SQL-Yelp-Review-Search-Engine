@@ -30,21 +30,49 @@ def clean(tokens):
 
 
 documents = []
+hci = 0
+others = 0
+
+for filename in ['wos.txt', 'pubmed.txt', 'microsoft.txt']:
+    for line in open('papers/' + filename):
+        tokens = TOK(line)
+        tokens = clean(tokens)
+        tokens = tokens * 20
+
+        keywords = []
+        '''
+        keywords = map(lambda keyword: keyword.lower(), paper.keywords)
+        keywords = map(lambda keyword: 'AKW:' + keyword, keywords)
+        keywords.append('PP:CSCW:%s:%s' % (paper.year, paper.pid))
+        for author in paper.authors:
+            keywords.append('AUTH:%s' % author)
+        '''
+        sentence = LabeledSentence(words=tokens, tags=keywords)
+        documents.append(sentence)
+        others += len(tokens)
+
+print len(documents)
+
+
 for paper in iterSIGCHI():
     if len(paper.keywords) == 0:
         continue
     tokens = TOK(paper.text) + TOK(paper.title) + (TOK(paper.abstract) * int(round(float(len(paper.abstract))/len(paper.text)/2)))
     tokens = clean(tokens)
 
+    keywords = []
+    '''
     keywords = map(lambda keyword: keyword.lower(), paper.keywords)
     keywords = map(lambda keyword: 'AKW:' + keyword, keywords)
     keywords.append('PP:CHI:%s:%s' % (paper.year, paper.pid))
     for author in paper.authors:
         keywords.append('AUTH:%s' % author)
+    '''
     sentence = LabeledSentence(words=tokens, tags=keywords)
     documents.append(sentence)
 
-    PAPERS['CHI:%s:%s' % (paper.year, paper.pid)] = paper
+    #PAPERS['CHI:%s:%s' % (paper.year, paper.pid)] = paper
+    hci += len(tokens)
 
 for paper in iterCSCW():
     if len(paper.keywords) == 0:
@@ -52,21 +80,29 @@ for paper in iterCSCW():
     tokens = TOK(paper.text) + TOK(paper.title) + (TOK(paper.abstract) * int(round(float(len(paper.abstract))/len(paper.text)/2)))
     tokens = clean(tokens)
 
+    keywords = []
+    '''
     keywords = map(lambda keyword: keyword.lower(), paper.keywords)
     keywords = map(lambda keyword: 'AKW:' + keyword, keywords)
     keywords.append('PP:CSCW:%s:%s' % (paper.year, paper.pid))
     for author in paper.authors:
         keywords.append('AUTH:%s' % author)
+    '''
     sentence = LabeledSentence(words=tokens, tags=keywords)
     documents.append(sentence)
 
-    PAPERS['CSCW:%s:%s' % (paper.year, paper.pid)] = paper
+    #PAPERS['CSCW:%s:%s' % (paper.year, paper.pid)] = paper
+    hci += len(tokens)
 
 print len(documents)
+print 'HCI:', hci
+print 'Others:', others
 
+'''
 fp = open('papers.pickle', 'w')
 pickle.dump(PAPERS, fp, pickle.HIGHEST_PROTOCOL)
 fp.close()
+'''
 
 model = Doc2Vec(documents, size=600, workers=8, min_count=20)
 model.save('papers.model')
