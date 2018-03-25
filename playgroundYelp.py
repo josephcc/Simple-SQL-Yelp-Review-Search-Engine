@@ -1,5 +1,6 @@
 # coding: utf-8
 import pdb
+import os
 
 from operator import *
 
@@ -12,7 +13,7 @@ def loadModel(fn):
     global model
     model = Doc2Vec.load(fn)
     return model
-loadModel('./models/yelp.model')
+loadModel(os.path.join(os.path.dirname(__file__), './models/yelp.model'))
 
 from gensim import matutils
 from numpy import dot

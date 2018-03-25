@@ -1,16 +1,22 @@
 # coding: utf-8
 
+import re
+import logging
 from flask import Flask, request
 from flask_cors import CORS, cross_origin
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
 CORS(app)
 cors = CORS(app, resources={"/*": {"origins": "*:*"}})
 
 import sys
 import json
+from json import encoder
+encoder.FLOAT_REPR = lambda o: format(o, '.8f')
 import string
 from itertools import *
 from operator import *
+from collections import *
 
 import timeit
 
@@ -20,15 +26,20 @@ JSQL = JinjaSql()
 from modelYelp import *
 from sqlalchemy import text as Text
 
-from gensim.models.doc2vec import Doc2Vec
 
 START = timeit.default_timer()
-#model = Doc2Vec.load('./models/yelp.model')
+#from indexYelpVectors import getWordMentionsAndVectors
+from gensim.models.doc2vec import Doc2Vec
+model = Doc2Vec.load('./models/yelp.model')
 time = timeit.default_timer() - START
 print 'MODEL LOAD TIME:', time
 
+import nltk
 from nltk.stem.porter import *
 stemmer = PorterStemmer()
+from nltk.corpus import stopwords
+STOPWORDS = set(stopwords.words('english')) - set(['not'])
+
 
 #avgDL = engine.execute(Text('select avg(review_count) from business;')).first()[0]
 #avgDL = float(avgDL)
@@ -45,11 +56,21 @@ print numberOfBusinesses
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_GetReview = open('SQL/getReviews.sql').read()
+SQL_GetMention = open('SQL/getMentions.sql').read()
 SQL_Index = open('SQL/index.sql').read()
 SQL_TermFreq = open('./SQL/termFreq.sql').read()
 SQL_Business = open('./SQL/business.sql').read()
 SQL_Category = open('./SQL/category.sql').read()
 SQL_KeywordRatings = open('./SQL/keywordRatings.sql').read()
+
+def getMentionsSQL(city, keywords, limitPerKeyword=5, context=100):
+    sql, binds = JSQL.prepare_query(SQL_GetMention, {
+        'city': city,
+        'keywords': keywords,
+        'limitPerKeyword': limitPerKeyword,
+        'context': context
+    })
+    return sql, binds
 
 def getRankSQL(city, keywords, stars, limit=20):
     sql, binds = JSQL.prepare_query(SQL_RankBusiness, {
@@ -110,11 +131,11 @@ def getCategorySQL(business_ids):
 
 
 
-def search(keywords, city, stars, allKeywords):
+def search(keywords, city, stars, allKeywords, limit=10):
     print keywords, city
 
     START = timeit.default_timer()
-    sql, binds = getRankSQL(city, keywords, stars, 10)
+    sql, binds = getRankSQL(city, keywords, stars, limit)
     raw = sql % tuple(binds)
     #print raw
     ranks = engine.execute(Text(raw))
@@ -245,6 +266,8 @@ def insertLog(logs):
 @app.route("/search/<city>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_search(city, stars, keywords, weights):
+    if city == 'Montreal':
+        city = u'Montréal'
     logs = request.get_json(force=True)
     if logs != None and logs['turkerId'] != 'nologging':
         logs['api'] = 'search'
@@ -262,18 +285,22 @@ def api_search(city, stars, keywords, weights):
     keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city, stars, allKeywords)
+    payload = search(keywords, city, stars, allKeywords, 30)
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
 @app.route("/baseline_search/<city>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_baseline_search(city, stars, keywords, weights):
+    if city == 'Montreal':
+        city = u'Montréal'
+
     logs = request.get_json(force=True)
     if logs != None and logs['turkerId'] != 'nologging':
         logs['api'] = 'baseline_search'
         insertLog(logs)
         print logs
+
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -294,16 +321,17 @@ def api_baseline_search(city, stars, keywords, weights):
     keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city, stars, allKeywords)
+    payload = search(keywords, city, stars, allKeywords, 30)
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
 @app.route("/expand/<city>/<keywords>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_expand(city, keywords):
+    if city == 'Montreal':
+        city = u'Montréal'
     keywords = map(string.strip, keywords.split(','))
-    print keywords
-    candidates = model.most_similar(keywords, topn=100)
+    candidates = model.most_similar(keywords, topn=1000)
     seen = set(map(stemmer.stem, keywords))
     out = []
     for candidate, score in candidates:
@@ -324,11 +352,42 @@ def api_expand(city, keywords):
         else:
             count, review_count, business_count = 0, 0, 0
 
-        if count == 0:
-            continue
-        out2.append({'keyword': term, 'score': score, 'count': count, 'review_count': review_count, 'business_count': business_count})
+        business_proportion = float(business_count) / numberOfBusinesses[city]
 
-    return json.dumps(out2)
+        if review_count <= 50 or business_count <= 3 or business_proportion >= 0.4:
+            continue
+
+        out2.append({'keyword': term, 'score': score, 'count': count, 'review_count': review_count, 'business_count': business_count, 'business_proportion': business_proportion})
+
+    out2.sort(key=lambda x: x['score'], reverse=True)
+    out2 = out2[:5]
+    stems = map(stemmer.stem, map(itemgetter('keyword'), out2))
+
+    sql, binds = getMentionsSQL(city, stems, limitPerKeyword=3, context=30)
+    raw = sql % tuple(binds)
+    mentions = engine.execute(Text(raw))
+    mentions = map(list, mentions)
+    stem2mentions = defaultdict(list)
+    for mention in mentions:
+        token, bid, rid, texts = mention[0], mention[1], mention[2], mention[3:]
+        texts = map(lambda s: re.sub(r'\s\s+', ' ', s), texts)
+        texts = map(string.strip, texts)
+        stem2mentions[token].append( {'review_id': rid, 'mention': texts, 'business_id': bid} )
+
+    out3 = []
+    for o in out2:
+        out3.append({
+            'keyword': o['keyword'],
+            'count': o['count'],
+            'score': o['score'],
+            'business_count': o['business_count'],
+            'business_proportion': o['business_proportion'],
+            'mentions': stem2mentions[stemmer.stem(o['keyword'])]
+        })
+
+    print len(out3)
+
+    return json.dumps(out3)
 
 
 @app.route("/business/<city>/<keyword>", methods=['POST', 'GET'])
@@ -356,12 +415,14 @@ def api_business(city, keyword):
 @app.route("/reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_reviews(business_id, city, keywords, weights):
+    if city == 'Montreal':
+        city = u'Montréal'
     logs = request.get_json(force=True)
     if logs != None and logs['turkerId'] != 'nologging':
         logs['api'] = 'reviews'
         insertLog(logs)
         print logs
-    print keywords
+    print 'keywords', keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
     keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
@@ -370,7 +431,10 @@ def api_reviews(business_id, city, keywords, weights):
 
 
     START = timeit.default_timer()
-    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=30)
+    limit = 30
+    if len(keywords) == 1:
+        limit = 100
+    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=limit)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
@@ -393,21 +457,73 @@ def api_reviews(business_id, city, keywords, weights):
 
     START = timeit.default_timer()
     sql, binds = getIndexSQL(keywords, review_ids, city)
+    print 'INDEX1'
+    print keywords, review_ids, city
     raw = sql % tuple(binds)
     #print raw
     index = list(engine.execute(Text(raw)))
     time = timeit.default_timer() - START
     print 'INDEX TIME:', time
-
     # this is absolutely unreadable
     index = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index, key=itemgetter(0))}
 
-    return json.dumps({'index': index, 'review': _review})
+    payload = {'index': index, 'review': _review}
+
+    if len(keywords) == 1 and len(_review) >= 10:
+        winsize = 5
+        charwinsize = winsize * 13
+        stems = []
+        stem2words = {}
+        stem2review_ids = defaultdict(list)
+        print 'KWKWKW'
+        print stemmer.stem(keywords[0][0][0])
+        stopwords = STOPWORDS | set([stemmer.stem(keywords[0][0][0])])
+        for review in _review:
+            start, end, _ = index[review['review_id']][0]
+            text = review['text'][start-charwinsize:start] + ' ' + review['text'][end:end+charwinsize]
+            _tokens = nltk.word_tokenize(text)[1:-1]
+            _tokens = map(string.lower, _tokens)
+            _tokens = filter(lambda token: len(token) > 3 and (not token in stopwords), _tokens)
+            _stems = map(stemmer.stem, _tokens)
+            stem2words.update(dict(zip(_stems, _tokens)))
+            for stem in _stems:
+                stem2review_ids[stem].append(review['review_id'])
+            stems += list(set(_stems))
+        stems = Counter(stems)
+        tops = [(token, float(count)/len(_review)) for token, count in stems.most_common()[:20]]
+        tops = filter(lambda x: x[1] > 0.14, tops)[:9]
+        if len(tops) > 0:
+            stems = [([stem], 1.0) for stem in map(itemgetter(0), tops)]
+
+            review_ids = reduce(add, [stem2review_ids[stem] for stem, perc in tops])
+            review_ids = list(set(review_ids))
+
+            print len(_review), tops
+            tops = [(stem2words[stem], perc) for stem, perc in tops]
+            print len(_review), tops
+
+            START = timeit.default_timer()
+            sql, binds = getIndexSQL(stems, review_ids, city)
+            print 'INDEX2'
+            print stems, review_ids, city
+            raw = sql % tuple(binds)
+            #print raw
+            index2 = list(engine.execute(Text(raw)))
+            time = timeit.default_timer() - START
+            print 'INDEX TIME:', time
+            # this is absolutely unreadable
+            index2 = {review_id: map(itemgetter(2,3,1), idx) for review_id, idx in groupby(index2, key=itemgetter(0))}
+            print index2
+            payload['comentions'] = {'tops': tops, 'index': index2}
+
+    return json.dumps(payload)
 
 
 @app.route("/baseline_reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')
 def api_baseline_reviews(business_id, city, keywords, weights):
+    if city == 'Montreal':
+        city = u'Montréal'
     logs = request.get_json(force=True)
     if logs != None and logs['turkerId'] != 'nologging':
         logs['api'] = 'baseline_reviews'
@@ -467,6 +583,8 @@ def api_baseline_reviews(business_id, city, keywords, weights):
 @app.route("/reviews/<business_id>/<city>", methods=['POST', 'GET'])
 @cross_origin(origin='*')
 def api_reviews_business(business_id, city):
+    if city == 'Montreal':
+        city = u'Montréal'
     logs = request.get_json(force=True)
     if logs != None and logs['turkerId'] != 'nologging':
         logs['api'] = 'review_business'
@@ -474,7 +592,7 @@ def api_reviews_business(business_id, city):
         print logs
 
     START = timeit.default_timer()
-    sql, binds = getBusinessReviewSQL(business_id, city, limit=30)
+    sql, binds = getBusinessReviewSQL(business_id, city, limit=100)
     raw = sql % tuple(binds)
     print raw
     reviews = engine.execute(Text(raw))
@@ -493,7 +611,12 @@ def api_reviews_business(business_id, city):
             'num_keywords': []
         })
 
-
     return json.dumps({'index': {}, 'review': _review})
 
+@app.route("/mentions/<keyword>/<city>", methods=['POST', 'GET'])
+@cross_origin(origin='*')
+def api_mentions(keyword, city):
+    if city == 'Montreal':
+        city = u'Montréal'
+    return json.dumps(getWordMentionsAndVectors(stemmer.stem(keyword), city, limit=50))
 

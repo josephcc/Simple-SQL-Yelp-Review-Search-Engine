@@ -42,6 +42,20 @@ class Review(DeclarativeBase):
 
     business_id = Column(String, ForeignKey('business.business_id'))
     business = relationship("Business", back_populates="reviews")
+
+class BusinessVector(DeclarativeBase):
+    __tablename__ = 'business_token_vector_pittsburgh'
+
+    id = Column(Integer, primary_key=True)
+    vector = Column('vector', ARRAY(Float))
+    business_id = Column(String, index=True)
+    token = Column(String, index=True)
+    city = Column(String, index=True)
+
+    __table_args__ = (
+        Index('idx_city_business_token_pittsburgh', 'city', 'business_id', 'token'),
+    )
+
     
 class Index(DeclarativeBase):
     __tablename__ = 'index'
