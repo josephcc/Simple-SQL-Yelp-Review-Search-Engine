@@ -9,9 +9,15 @@ DBSession = scoped_session(sessionmaker())
 DBSession.configure(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+'''
 basePath = './corpus/YELP'
 businessFilePath = basePath + '/yelp_academic_dataset_business.json'
 reviewFilePath = basePath + '/yelp_academic_dataset_review.json'
+'''
+
+basePath = './corpus/YELP_NEW'
+businessFilePath = basePath + '/business.json'
+reviewFilePath = basePath + '/review.json'
 
 
 print 'loading business'
@@ -24,10 +30,21 @@ for business in open(businessFilePath):
         print '%.2f%%' % (100.0 * _n / 144072), 
         sys.stdout.flush()
     business = json.loads(business)
+
+    if business['city'] != 'Montreal' and business['city'] != u"Montr\u00e9al":
+        continue
+
     if business['categories'] == None or 'Restaurants' not in business['categories'] or business['is_open'] == 0:
         continue
 
+    if not ('latitude' in business and 'longitude' in business):
+        continue
+
+
+    business['city'] = u"Montr\u00e9al"
+
     businessObj = {k:business[k] for k in ['business_id', 'stars', 'name', 'review_count', 'state', 'city']}
+    businessObj['location'] = 'POINT(%s %s)' % (business['longitude'], business['latitude'])
 
     businessObj = Business(**businessObj)
     DBSession.add(businessObj)
@@ -48,10 +65,9 @@ for business in open(businessFilePath):
 DBSession.commit()
 print
 print n
-        
-'''
 
-# In[4]:
+print 'COMMITED'
+        
 
 n = 0
 _n = 0
@@ -81,4 +97,3 @@ DBSession.commit()
 print 'done'
 print n
 
-'''

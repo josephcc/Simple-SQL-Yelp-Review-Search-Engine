@@ -4,6 +4,8 @@ from sqlalchemy.engine.url import URL
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Integer, ForeignKey, String, Column, Float, Text, Boolean
+from geoalchemy2 import Geography
+
 
 DeclarativeBase = declarative_base()
 
@@ -16,6 +18,7 @@ class Business(DeclarativeBase):
     name = Column(String)
     state = Column(String, index=True)
     city = Column(String, index=True)
+    location = Column(Geography(geometry_type='POINT', srid=4326))
 
     categories = relationship("Category", back_populates="business")
     reviews = relationship("Review", back_populates="business")
@@ -95,7 +98,7 @@ DATABASE = {
   'port': '5432',
   'username': 'josephcc',
   'password': 'josephcc',
-  'database': 'YELP'
+  'database': 'yelp_new'
 }
 
 from sqlalchemy.pool import QueuePool
@@ -113,3 +116,6 @@ def getSession():
 
 # r = S.query(Index.review_id, func.count(Index.review_id)).group_by(Index.review_id).filter(Index.city == 'Pittsburgh').filter(or_(Index.token == 'thai', Index.token == 'noodl')).order_by(func.count(I
 #     ...: ndex.review_id).desc()).all()
+
+# select token, city, count(*) as term, count(distinct review_id) as review, count(distinct business_id) as business into docFreq from index group by token, city 
+# create index idx_docFreq_token_city on docFreq (token, city)

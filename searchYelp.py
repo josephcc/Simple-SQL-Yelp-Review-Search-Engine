@@ -134,18 +134,23 @@ def getCategorySQL(business_ids):
 def search(keywords, city, stars, allKeywords, limit=10):
     print keywords, city
 
+    print stars
+    stars = int(min(4.5, float(stars)))
+    print stars
+
     START = timeit.default_timer()
     sql, binds = getRankSQL(city, keywords, stars, limit)
     raw = sql % tuple(binds)
-    #print raw
+    print raw
     ranks = engine.execute(Text(raw))
     ranks = list(ranks)
     time = timeit.default_timer() - START
     print 'RANK LIST TIME:', time
+    print ranks
 
     START = timeit.default_timer()
     business_ids = map(itemgetter(0), ranks)
-    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=3, stars=stars)
+    sql, binds = getReviewSQL(business_ids, avgDLReview, city, keywords, limit=2, stars=stars)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
@@ -207,13 +212,16 @@ def search(keywords, city, stars, allKeywords, limit=10):
     _counts = {keyword[0]: 0 for keyword in map(itemgetter(0), keywords)}
     for rank in ranks:
         i += 1
-        business_id, name, stars, review_count, score = rank[:5]
-        counts = rank[5:]
+        business_id, name, stars, review_count, location, score = rank[:6]
+        location = json.loads(location)['coordinates']
+        counts = rank[6:]
+
         bobj = {
             'name': name,
             'stars': stars,
             'num_reviews': review_count,
             'business_id': business_id,
+            'location': location,
             #'categories': [],
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
@@ -231,21 +239,22 @@ def search(keywords, city, stars, allKeywords, limit=10):
         print '-' *55
         '''
         robj = []
-        for review in reviews[business_id]:
-            row, _business_id, review_id, score, stars, text = review[:6]
-            #assert(_business_id == business_id)
-            counts = review[6:]
-            '''
-            print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
-            print text[:1000].encode('utf8')
-            print '=='
-            '''
-            robj.append({
-                'text': text,
-                'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
-                'stars': stars,
-                'review_id': review_id
-            })
+        if business_id in reviews:
+            for review in reviews[business_id]:
+                row, _business_id, review_id, score, stars, text = review[:6]
+                #assert(_business_id == business_id)
+                counts = review[6:]
+                '''
+                print '[%d]' % row, stars, zip(map(itemgetter(0), keywords), counts)
+                print text[:1000].encode('utf8')
+                print '=='
+                '''
+                robj.append({
+                    'text': text,
+                    'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts)),
+                    'stars': stars,
+                    'review_id': review_id
+                })
         _review[business_id] = robj
         _business.append(bobj)
     print
@@ -259,6 +268,8 @@ def insertLog(logs):
     obj.action = logs.get('action', '')
     obj.condition = logs.get('condition', '')
     obj.content = json.dumps(logs)
+    print 'content:'
+    print logs
     session = getSession()
     session.add(obj)
     session.commit()
@@ -273,6 +284,7 @@ def api_search(city, stars, keywords, weights):
         logs['api'] = 'search'
         insertLog(logs)
         print logs
+
     print keywords
     keywords = keywords.split('|')
     rawKeywords = keywords
@@ -287,6 +299,17 @@ def api_search(city, stars, keywords, weights):
 
     payload = search(keywords, city, stars, allKeywords, 30)
     #payload['keywords'] = rawKeywords
+    print keywords
+    print map(itemgetter(0), map(itemgetter(0), keywords))
+    vals = map(itemgetter(0), map(itemgetter(0), keywords))
+    print 
+    print rawKeywords
+    print map(itemgetter(0), map(itemgetter(0), rawKeywords))
+    keys = map(itemgetter(0), map(itemgetter(0), rawKeywords))
+    word2stem = dict(zip(keys, vals))
+    print word2stem
+    payload['word2stem'] = word2stem
+
     return json.dumps(payload)
 
 @app.route("/baseline_search/<city>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
@@ -331,6 +354,7 @@ def api_expand(city, keywords):
     if city == 'Montreal':
         city = u'Montréal'
     keywords = map(string.strip, keywords.split(','))
+    keywords = filter(lambda kw: kw in model, keywords)
     candidates = model.most_similar(keywords, topn=1000)
     seen = set(map(stemmer.stem, keywords))
     out = []
@@ -363,7 +387,7 @@ def api_expand(city, keywords):
     out2 = out2[:5]
     stems = map(stemmer.stem, map(itemgetter('keyword'), out2))
 
-    sql, binds = getMentionsSQL(city, stems, limitPerKeyword=3, context=30)
+    sql, binds = getMentionsSQL(city, stems, limitPerKeyword=5, context=30)
     raw = sql % tuple(binds)
     mentions = engine.execute(Text(raw))
     mentions = map(list, mentions)
@@ -491,7 +515,7 @@ def api_reviews(business_id, city, keywords, weights):
             stems += list(set(_stems))
         stems = Counter(stems)
         tops = [(token, float(count)/len(_review)) for token, count in stems.most_common()[:20]]
-        tops = filter(lambda x: x[1] > 0.14, tops)[:9]
+        tops = filter(lambda x: x[1] > 0.14, tops)[:8]
         if len(tops) > 0:
             stems = [([stem], 1.0) for stem in map(itemgetter(0), tops)]
 
@@ -518,6 +542,17 @@ def api_reviews(business_id, city, keywords, weights):
 
     return json.dumps(payload)
 
+
+@app.route("/log", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
+def api_log():
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'log'
+        insertLog(logs)
+        print logs
+        return 'NOT_LOGGED'
+    return 'OK'
 
 @app.route("/baseline_reviews/<business_id>/<city>/<keywords>/<weights>", methods=['POST', 'GET'])
 @cross_origin(origin='*:*')

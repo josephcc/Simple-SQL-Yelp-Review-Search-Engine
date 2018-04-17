@@ -24,6 +24,7 @@ SELECT
     business.name,
     business.stars,
     business.review_count,
+    ST_AsGeoJSON(business.location),
     (({% for positive in positives -%}
         LEAST(1, rank.{{positive[0][0]}}) {% if not loop.last %} + {% endif %}
     {%- endfor %}) / CAST({{positives|length}} AS float) ) *
