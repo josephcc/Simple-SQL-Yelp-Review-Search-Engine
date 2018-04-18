@@ -43,7 +43,7 @@ STOPWORDS = set(stopwords.words('english')) - set(['not'])
 
 #avgDL = engine.execute(Text('select avg(review_count) from business;')).first()[0]
 #avgDL = float(avgDL)
-#avgDLReview = engine.execute(Text('with innerv AS (select review_id, max(index) from index group by review_id limit 30) SELECT avg(max) from innerv;')).first()[0]
+#avgDLReview = engine.execute(Text('with innerv AS (select review_id, max(index) from index group by review_id limit 20) SELECT avg(max) from innerv;')).first()[0]
 #avgDLReview = float(avgDLReview)
 avgDL = 53.1536351449
 avgDLReview = 118.666666667
@@ -54,6 +54,7 @@ numberOfBusinesses = dict(list(engine.execute(Text(r'''SELECT city, COUNT(busine
 print numberOfBusinesses
 
 SQL_RankBusiness = open('SQL/rankBusiness.sql').read()
+SQL_RankBusinessInArea = open('SQL/rankBusinessInArea.sql').read()
 SQL_RankReview = open('SQL/rankReviews.sql').read()
 SQL_GetReview = open('SQL/getReviews.sql').read()
 SQL_GetMention = open('SQL/getMentions.sql').read()
@@ -82,6 +83,20 @@ def getRankSQL(city, keywords, stars, limit=20):
         'keywords': keywords,
         'positives': filter(lambda keyword: keyword[1] > 0, keywords),
         'limit': limit
+    })
+    return sql, binds
+
+def getRankInAreaSQL(city, bounds, keywords, stars, limit=20):
+    sql, binds = JSQL.prepare_query(SQL_RankBusinessInArea, {
+        'k': k,
+        'b': b,
+        'avgDL': avgDL,
+        'city': city,
+        'stars': stars,
+        'keywords': keywords,
+        'positives': filter(lambda keyword: keyword[1] > 0, keywords),
+        'limit': limit,
+        'bounds': bounds
     })
     return sql, binds
 
@@ -131,15 +146,16 @@ def getCategorySQL(business_ids):
 
 
 
-def search(keywords, city, stars, allKeywords, limit=10):
+def search(keywords, city, stars, allKeywords, limit=10, bounds=None):
     print keywords, city
 
-    print stars
-    stars = int(min(4.5, float(stars)))
-    print stars
+    #stars = int(min(4.5, float(stars)))
 
     START = timeit.default_timer()
-    sql, binds = getRankSQL(city, keywords, stars, limit)
+    if bounds == None:
+        sql, binds = getRankSQL(city, keywords, stars, limit)
+    else:
+        sql, binds = getRankInAreaSQL(city, bounds, keywords, stars, limit)
     raw = sql % tuple(binds)
     print raw
     ranks = engine.execute(Text(raw))
@@ -297,7 +313,48 @@ def api_search(city, stars, keywords, weights):
     keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city, stars, allKeywords, 30)
+    payload = search(keywords, city, stars, allKeywords, 20)
+    #payload['keywords'] = rawKeywords
+    print keywords
+    print map(itemgetter(0), map(itemgetter(0), keywords))
+    vals = map(itemgetter(0), map(itemgetter(0), keywords))
+    print 
+    print rawKeywords
+    print map(itemgetter(0), map(itemgetter(0), rawKeywords))
+    keys = map(itemgetter(0), map(itemgetter(0), rawKeywords))
+    word2stem = dict(zip(keys, vals))
+    print word2stem
+    payload['word2stem'] = word2stem
+
+    return json.dumps(payload)
+
+@app.route("/search/<city>/<bounds>/<stars>/<keywords>/<weights>", methods=['POST', 'GET'])
+@cross_origin(origin='*:*')
+def api_search_area(city, bounds, stars, keywords, weights):
+    if city == 'Montreal':
+        city = u'Montréal'
+    logs = request.get_json(force=True)
+    if logs != None and logs['turkerId'] != 'nologging':
+        logs['api'] = 'search'
+        insertLog(logs)
+        print logs
+
+    print keywords
+
+    bounds = bounds.replace('_', ',')
+
+    keywords = keywords.split('|')
+    rawKeywords = keywords
+    keywords = [map(stemmer.stem, map(string.strip, keyword.split(','))) for keyword in keywords]
+    rawKeywords = [map(string.strip, keyword.split(',')) for keyword in rawKeywords]
+    weights = map(float, weights.split('|'))
+
+    keywords = list(zip(keywords, weights))
+    allKeywords = keywords[:]
+    keywords = filter(lambda k: k[1] != 0, keywords)
+    rawKeywords = list(zip(rawKeywords, weights))
+
+    payload = search(keywords, city, stars, allKeywords, limit=20, bounds=bounds)
     #payload['keywords'] = rawKeywords
     print keywords
     print map(itemgetter(0), map(itemgetter(0), keywords))
@@ -344,7 +401,7 @@ def api_baseline_search(city, stars, keywords, weights):
     keywords = filter(lambda k: k[1] != 0, keywords)
     rawKeywords = list(zip(rawKeywords, weights))
 
-    payload = search(keywords, city, stars, allKeywords, 30)
+    payload = search(keywords, city, stars, allKeywords, 20)
     #payload['keywords'] = rawKeywords
     return json.dumps(payload)
 
@@ -387,7 +444,7 @@ def api_expand(city, keywords):
     out2 = out2[:5]
     stems = map(stemmer.stem, map(itemgetter('keyword'), out2))
 
-    sql, binds = getMentionsSQL(city, stems, limitPerKeyword=5, context=30)
+    sql, binds = getMentionsSQL(city, stems, limitPerKeyword=5, context=20)
     raw = sql % tuple(binds)
     mentions = engine.execute(Text(raw))
     mentions = map(list, mentions)
@@ -455,7 +512,7 @@ def api_reviews(business_id, city, keywords, weights):
 
 
     START = timeit.default_timer()
-    limit = 30
+    limit = 20
     if len(keywords) == 1:
         limit = 100
     sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=limit)
@@ -581,7 +638,7 @@ def api_baseline_reviews(business_id, city, keywords, weights):
 
 
     START = timeit.default_timer()
-    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=30)
+    sql, binds = getReviewSQL([business_id], avgDLReview, city, keywords, limit=20)
     raw = sql % tuple(binds)
     #print raw
     reviews = engine.execute(Text(raw))
