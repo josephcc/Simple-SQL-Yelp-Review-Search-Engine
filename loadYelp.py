@@ -45,6 +45,7 @@ for business in open(businessFilePath):
 
     businessObj = {k:business[k] for k in ['business_id', 'stars', 'name', 'review_count', 'state', 'city']}
     businessObj['location'] = 'POINT(%s %s)' % (business['longitude'], business['latitude'])
+    businessObj['address'] = business.get('address', '')
 
     businessObj = Business(**businessObj)
     DBSession.add(businessObj)
@@ -69,6 +70,7 @@ print n
 print 'COMMITED'
         
 
+'''
 n = 0
 _n = 0
 for review in open(reviewFilePath):
@@ -96,4 +98,5 @@ for review in open(reviewFilePath):
 DBSession.commit()
 print 'done'
 print n
+'''
 

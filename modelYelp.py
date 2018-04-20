@@ -16,6 +16,7 @@ class Business(DeclarativeBase):
     stars = Column(Float, index=True)
     review_count = Column(Integer, index=True)
     name = Column(String)
+    address = Column(String)
     state = Column(String, index=True)
     city = Column(String, index=True)
     location = Column(Geography(geometry_type='POINT', srid=4326))

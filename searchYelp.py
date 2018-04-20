@@ -228,9 +228,9 @@ def search(keywords, city, stars, allKeywords, limit=10, bounds=None):
     _counts = {keyword[0]: 0 for keyword in map(itemgetter(0), keywords)}
     for rank in ranks:
         i += 1
-        business_id, name, stars, review_count, location, score = rank[:6]
+        business_id, name, stars, review_count, address, location, score = rank[:7]
         location = json.loads(location)['coordinates']
-        counts = rank[6:]
+        counts = rank[7:]
 
         bobj = {
             'name': name,
@@ -238,6 +238,7 @@ def search(keywords, city, stars, allKeywords, limit=10, bounds=None):
             'num_reviews': review_count,
             'business_id': business_id,
             'location': location,
+            'address': address,
             #'categories': [],
             'num_keywords': list(zip(map(itemgetter(0), map(itemgetter(0), keywords)), counts))
         }
